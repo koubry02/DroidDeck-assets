@@ -1,43 +1,47 @@
 # DroidDeck Assets
 
-Runtime assets for DroidDeck app.
+Binary assets for DroidDeck app - downloaded automatically on first launch.
 
-## Required Files
+## Auto-Update
 
-Create a GitHub Release v1.0.0 with these archives:
+This repository uses GitHub Actions (`.github/workflows/update-assets.yml`) to automatically fetch the latest releases:
 
-| Component | Source | Notes |
-|-----------|--------|-------|
-| rootfs.tar.gz | Debian 12 slim ARM64 | ~30MB, extracted rootfs |
-| proot.tar.gz | PRoot | ~5MB, proot binary |
-| fex.tar.gz | [FEX-Emu/FEX releases](https://github.com/FEX-Emu/FEX/releases) | FEX-2604 |
-| wine.tar.gz | [ValveSoftware/wine](https://github.com/ValveSoftware/wine/releases) | Wine 10 |
-| dxvk.tar.gz | [doitsujin/dxvk](https://github.com/doitsujin/dxvk/releases) | DXVK 2.7 |
-| vkd3d-proton.tar.gz | [HansKristian-Work/vkd3d-proton](https://github.com/HansKristian-Work/vkd3d-proton/releases) | VKD3D-Proton 3.0 |
-| turnip.tar.gz | [nightmare321/freedreno_turnip](https://github.com/nightmare321/freedreno_turnip/releases) | Mesa Turnip v25.1 |
+| Component | Source | Auto-Updated |
+|-----------|--------|--------------|
+| PRoot | proot-me/proot v5.3.0 | ✅ |
+| DXVK | doitsujin/dxvk v2.7.1 | ✅ |
+| VKD3D-Proton | HansKristian-Work v3.0b | ✅ |
+| Turnip | whitebelyash/freedreno_turnip-CI | ✅ |
+| FEX | FEX-Emu/FEX | ❌ Manual (device) |
+| RootFS | FEXRootFSFetcher | ❌ Manual (device) |
 
-## Setup Steps
+## Manual Setup (FEX + RootFS)
 
-1. Create release v1.0.0 on GitHub
-2. Upload all .tar.gz files
-3. Compute SHA256 checksums:
-   ```bash
-   sha256sum *.tar.gz
-   ```
-4. Update manifest.json with real URLs and checksums
-5. Upload update.json with checksums
+FEX and RootFS must be downloaded on the Android device:
 
-## manifest.json format
-
-```json
-{
-  "version": "1.0.0",
-  "components": {
-    "name": {
-      "url": "https://github.com/.../file.tar.gz",
-      "sha256": "abc123...",
-      "size": 12345678
-    }
-  }
-}
+```bash
+curl -sSL https://raw.githubusercontent.com/FEX-Emu/FEX/main/Scripts/InstallFEX.py | python3
 ```
+
+This script:
+1. Installs FEX binaries
+2. Downloads x86_64 RootFS for running Windows programs
+
+## Release Format
+
+Assets are in GitHub Releases v1.0.0:
+- `proot-v5.3.0-aarch64-static` - PRoot binary
+- `dxvk.tar.gz` - D3D11→Vulkan
+- `vkd3d-proton.tar.gz` - D3D12→Vulkan  
+- `turnip.zip` - Mesa Turnip GPU driver
+- `manifest.json` - Version info
+
+## Usage
+
+The DroidDeck app downloads these assets automatically on first launch via `tauri-plugin-container`.
+
+## Manual Trigger
+
+To manually trigger asset update:
+1. Go to https://github.com/koubry02/droiddeck-assets/actions
+2. Run "Update Assets" workflow
