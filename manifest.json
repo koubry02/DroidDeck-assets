@@ -3,16 +3,16 @@
   "components": {
     "rootfs": {
       "url": "https://github.com/DroidDeck/droiddeck-assets/releases/download/v1.0.0/rootfs.tar.gz",
-      "sha256": "CHANGEME",
+      "sha256": "CHANGEME_after_creating",
       "size": 30000000
     },
     "proot": {
       "url": "https://github.com/DroidDeck/droiddeck-assets/releases/download/v1.0.0/proot.tar.gz",
-      "sha256": "CHANGEME",
+      "sha256": "CHANGEME_after_creating",
       "size": 5000000
     },
     "fex": {
-      "url": "https://github.com/FEX-Emu/FEX/releases/download/FEX-2604/FEX-2604-_arm64.tar.gz",
+      "url": "https://github.com/FEX-Emu/FEX/releases/download/FEX-2604/FEX-2604-Files.tar.xz",
       "sha256": "CHANGEME",
       "size": 150000000
     },
@@ -27,14 +27,14 @@
       "size": 10000000
     },
     "vkd3d-proton": {
-      "url": "https://github.com/HansKristian-Work/vkd3d-proton/releases/download/v3.0b/vkd3d-proton-3.0b.tar.gz",
+      "url": "https://github.com/HansKristian-Work/vkd3d-proton/releases/download/v3.0b/vkd3d-proton-3.0b.tar.zst",
       "sha256": "CHANGEME",
-      "size": 15000000
+      "size": 5000000
     },
     "turnip": {
-      "url": "https://github.com/nightmare321/freedreno_turnip/releases/download/v25.1.0/turnip-v25.1.0-android.tar.gz",
+      "url": "https://github.com/whitebelyash/freedreno_turnip-CI/releases/download/tu_v24/a8xx-gen8-V24.zip",
       "sha256": "CHANGEME",
-      "size": 50000000
+      "size": 2500000
     }
   }
 }
