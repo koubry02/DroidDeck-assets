@@ -26,16 +26,10 @@ jobs:
           PROOT_VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
           PROOT_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | contains("aarch64-static")) | .browser_download_url')
           echo "Downloading PRoot $PROOT_VERSION"
-          curl -sL "$PROOT_URL" -o proot.tar.gz
+          curl -sL "$PROOT_URL" -o proot
+          chmod +x proot
           echo "proot_version=$PROOT_VERSION" >> $GITHUB_OUTPUT
           echo "$PROOT_VERSION" > version_proot.txt
-
-      - name: Extract PRoot
-        run: |
-          tar -xzf proot.tar.gz
-          chmod +x proot-*/
-          # Rename for clarity
-          mv proot-* proot
 
       # ========== DXVK ==========
       - name: Download DXVK
