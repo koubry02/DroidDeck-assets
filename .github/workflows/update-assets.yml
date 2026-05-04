@@ -185,12 +185,21 @@ jobs:
           }
           EOF
 
-      - name: Upload manifest
+      - name: Upload manifest to release
         run: |
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/json" \
             --data-binary @manifest.json \
             "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create-release.outputs.release_id }}/assets?name=manifest.json"
+
+      # ========== Update manifest in repo ==========
+      - name: Commit manifest to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "Update manifest with latest versions" || echo "No changes to commit"
+          git push
 
       - name: Summary
         run: |
