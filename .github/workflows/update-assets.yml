@@ -20,36 +20,28 @@ jobs:
 
       # ========== PRoot ==========
       - name: Download PRoot
-        id: download-proot
         run: |
-          RELEASE_JSON=$(curl -s "https://api.github.com/repos/proot-me/proot/releases/latest")
-          PROOT_VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
-          PROOT_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | contains("aarch64-static")) | .browser_download_url')
+          PROOT_VERSION=$(curl -s "https://api.github.com/repos/proot-me/proot/releases/latest" | jq -r '.tag_name')
+          PROOT_URL=$(curl -s "https://api.github.com/repos/proot-me/proot/releases/latest" | jq -r '.assets[].browser_download_url' | grep aarch64-static)
           echo "Downloading PRoot $PROOT_VERSION"
           curl -sL "$PROOT_URL" -o proot
           chmod +x proot
-          echo "proot_version=$PROOT_VERSION" >> $GITHUB_OUTPUT
           echo "$PROOT_VERSION" > version_proot.txt
 
       # ========== DXVK ==========
       - name: Download DXVK
-        id: download-dxvk
         run: |
-          RELEASE_JSON=$(curl -s "https://api.github.com/repos/doitsujin/dxvk/releases/latest")
-          DXVK_VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
-          DXVK_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | contains("linux") and contains("tar.gz")) | .browser_download_url')
+          DXVK_VERSION=$(curl -s "https://api.github.com/repos/doitsujin/dxvk/releases/latest" | jq -r '.tag_name')
+          DXVK_URL=$(curl -s "https://api.github.com/repos/doitsujin/dxvk/releases/latest" | jq -r '.assets[].browser_download_url' | grep linux | grep tar.gz)
           echo "Downloading DXVK $DXVK_VERSION"
           curl -sL "$DXVK_URL" -o dxvk.tar.gz
-          echo "dxvk_version=$DXVK_VERSION" >> $GITHUB_OUTPUT
           echo "$DXVK_VERSION" > version_dxvk.txt
 
       # ========== VKD3D-Proton ==========
       - name: Download VKD3D-Proton
-        id: download-vkd3d
         run: |
-          RELEASE_JSON=$(curl -s "https://api.github.com/repos/HansKristian-Work/vkd3d-proton/releases/latest")
-          VKD3D_VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
-          VKD3D_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | contains("tar.zst")) | .browser_download_url')
+          VKD3D_VERSION=$(curl -s "https://api.github.com/repos/HansKristian-Work/vkd3d-proton/releases/latest" | jq -r '.tag_name')
+          VKD3D_URL=$(curl -s "https://api.github.com/repos/HansKristian-Work/vkd3d-proton/releases/latest" | jq -r '.assets[].browser_download_url' | grep tar.zst)
           echo "Downloading VKD3D-Proton $VKD3D_VERSION"
           curl -sL "$VKD3D_URL" -o vkd3d-proton.tar.zst
           # Convert to tar.gz
@@ -57,19 +49,15 @@ jobs:
           FOLDER=$(ls -d vkd3d-proton-*/)
           tar -czf vkd3d-proton.tar.gz "$FOLDER"
           rm -rf "$FOLDER" vkd3d-proton.tar.zst
-          echo "vkd3d_version=$VKD3D_VERSION" >> $GITHUB_OUTPUT
           echo "$VKD3D_VERSION" > version_vkd3d.txt
 
       # ========== Turnip ==========
       - name: Download Turnip
-        id: download-turnip
         run: |
-          RELEASE_JSON=$(curl -s "https://api.github.com/repos/whitebelyash/freedreno_turnip-CI/releases/latest")
-          TURNIP_VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
-          TURNIP_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | contains("a8xx-gen8") and contains("zip")) | .browser_download_url')
+          TURNIP_VERSION=$(curl -s "https://api.github.com/repos/whitebelyash/freedreno_turnip-CI/releases/latest" | jq -r '.tag_name')
+          TURNIP_URL=$(curl -s "https://api.github.com/repos/whitebelyash/freedreno_turnip-CI/releases/latest" | jq -r '.assets[].browser_download_url' | grep a8xx-gen8 | grep zip)
           echo "Downloading Turnip $TURNIP_VERSION"
           curl -sL "$TURNIP_URL" -o turnip.zip
-          echo "turnip_version=$TURNIP_VERSION" >> $GITHUB_OUTPUT
           echo "$TURNIP_VERSION" > version_turnip.txt
 
       # ========== Create Release ==========
