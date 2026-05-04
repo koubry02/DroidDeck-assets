@@ -25,15 +25,10 @@ jobs:
         with:
           repo: proot-me/proot
           version: latest
-          file: "aarch64.*static"
-          regex: true
+          file: "proot-v.*-aarch64-static"
 
-      - name: Rename PRoot with version
-        run: |
-          mv proot-v*-aarch64-static proot-v${PROOT_TAG}-aarch64-static
-          chmod +x proot-v${PROOT_TAG}-aarch64-static
-        env:
-          PROOT_TAG: ${{ steps.proot-version.outputs.version }}
+      - name: Make PRoot executable
+        run: chmod +x proot-*-aarch64-static
 
       # ========== DXVK ==========
       - name: Get DXVK latest
@@ -43,13 +38,8 @@ jobs:
           repo: doitsujin/dxvk
           version: latest
           file: "dxvk-.*\\.tar\\.gz"
-          regex: true
 
-      - name: Rename DXVK with version
-        run: |
-          mv dxvk-*.tar.gz dxvk-v${DXVK_VERSION}.tar.gz
-        env:
-          DXVK_VERSION: ${{ steps.dxvk-version.outputs.version }}
+      # DXVK - no rename needed (already has version)
 
       # ========== VKD3D-Proton ==========
       - name: Get VKD3D-Proton latest
@@ -58,20 +48,17 @@ jobs:
         with:
           repo: HansKristian-Work/vkd3d-proton
           version: latest
-          file: ".*\\.tar\\.zst"
-          regex: true
+          file: "vkd3d-proton-.*\\.tar\\.zst"
 
       - name: Convert VKD3D zst to tar.gz
         run: |
-          # Extract .tar.zst and convert to .tar.gz
-          tar -I zstd -xf vkd3d-proton-*.tar.zst
-          # Rename the extracted folder
-          mv vkd3d-proton-* vkd3d-proton-tmp
-          # Repack as tar.gz
-          tar -czf vkd3d-proton-v${VKD3D_VERSION}.tar.gz vkd3d-proton-tmp/
-          rm -rf vkd3d-proton-tmp
-        env:
-          VKD3D_VERSION: ${{ steps.vkd3d-version.outputs.version }}
+          # Find the downloaded .zst file
+          ZST_FILE=$(ls vkd3d-proton-*.tar.zst)
+          # Extract and convert to tar.gz
+          tar -I zstd -xf "$ZST_FILE"
+          FOLDER=$(ls -d vkd3d-proton-*/)
+          tar -czf "${ZST_FILE%.zst}.tar.gz" "$FOLDER"
+          rm -rf "$FOLDER"
 
       # ========== Turnip ==========
       - name: Get Turnip latest
@@ -80,14 +67,9 @@ jobs:
         with:
           repo: whitebelyash/freedreno_turnip-CI
           version: latest
-          file: "a8xx-gen8.*\\.zip"
-          regex: true
+          file: "a8xx-gen8-.*\\.zip"
 
-      - name: Rename Turnip with version
-        run: |
-          mv a8xx-gen8-*.zip turnip-${TURNIP_TAG}.zip
-        env:
-          TURNIP_TAG: ${{ steps.turnip-version.outputs.version }}
+      # Turnip - no rename needed (already has version)
 
       # ========== Create Release ==========
       - name: Create release
@@ -125,37 +107,29 @@ jobs:
         run: |
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/octet-stream" \
-            --data-binary @proot-v${PROOT_TAG}-aarch64-static \
+            --data-binary @proot-*-aarch64-static \
             "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create-release.outputs.release_id }}/assets?name=proot-${{ steps.proot-version.outputs.version }}-aarch64-static"
-        env:
-          PROOT_TAG: ${{ steps.proot-version.outputs.version }}
 
       - name: Upload DXVK
         run: |
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/gzip" \
-            --data-binary @dxvk-v${DXVK_VERSION}.tar.gz \
+            --data-binary @dxvk-*.tar.gz \
             "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create-release.outputs.release_id }}/assets?name=dxvk-${{ steps.dxvk-version.outputs.version }}.tar.gz"
-        env:
-          DXVK_VERSION: ${{ steps.dxvk-version.outputs.version }}
 
       - name: Upload VKD3D
         run: |
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/gzip" \
-            --data-binary @vkd3d-proton-v${VKD3D_VERSION}.tar.gz \
+            --data-binary @vkd3d-proton-*.tar.gz \
             "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create-release.outputs.release_id }}/assets?name=vkd3d-proton-${{ steps.vkd3d-version.outputs.version }}.tar.gz"
-        env:
-          VKD3D_VERSION: ${{ steps.vkd3d-version.outputs.version }}
 
       - name: Upload Turnip
         run: |
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/zip" \
-            --data-binary @turnip-${TURNIP_TAG}.zip \
+            --data-binary @a8xx-gen8-*.zip \
             "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create-release.outputs.release_id }}/assets?name=turnip-${{ steps.turnip-version.outputs.version }}.zip"
-        env:
-          TURNIP_TAG: ${{ steps.turnip-version.outputs.version }}
 
       # ========== Upload manifest.json ==========
       - name: Create manifest
