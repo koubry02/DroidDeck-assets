@@ -16,60 +16,67 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y zstd
+        run: sudo apt-get update && sudo apt-get install -y zstd jq
 
       # ========== PRoot ==========
-      - name: Get PRoot latest version
-        id: proot-version
-        uses: dsaltares/fetch-gh-release-asset@master
-        with:
-          repo: proot-me/proot
-          version: latest
-          file: "proot-v.*-aarch64-static"
+      - name: Download PRoot
+        id: download-proot
+        run: |
+          RELEASE_JSON=$(curl -s "https://api.github.com/repos/proot-me/proot/releases/latest")
+          PROOT_VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+          PROOT_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | contains("aarch64-static")) | .browser_download_url')
+          echo "Downloading PRoot $PROOT_VERSION"
+          curl -sL "$PROOT_URL" -o proot.tar.gz
+          echo "proot_version=$PROOT_VERSION" >> $GITHUB_OUTPUT
+          echo "$PROOT_VERSION" > version_proot.txt
 
-      - name: Make PRoot executable
-        run: chmod +x proot-*-aarch64-static
+      - name: Extract PRoot
+        run: |
+          tar -xzf proot.tar.gz
+          chmod +x proot-*/
+          # Rename for clarity
+          mv proot-* proot
 
       # ========== DXVK ==========
-      - name: Get DXVK latest
-        id: dxvk-version
-        uses: dsaltares/fetch-gh-release-asset@master
-        with:
-          repo: doitsujin/dxvk
-          version: latest
-          file: "dxvk-.*\\.tar\\.gz"
-
-      # DXVK - no rename needed (already has version)
+      - name: Download DXVK
+        id: download-dxvk
+        run: |
+          RELEASE_JSON=$(curl -s "https://api.github.com/repos/doitsujin/dxvk/releases/latest")
+          DXVK_VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+          DXVK_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | contains("linux") and contains("tar.gz")) | .browser_download_url')
+          echo "Downloading DXVK $DXVK_VERSION"
+          curl -sL "$DXVK_URL" -o dxvk.tar.gz
+          echo "dxvk_version=$DXVK_VERSION" >> $GITHUB_OUTPUT
+          echo "$DXVK_VERSION" > version_dxvk.txt
 
       # ========== VKD3D-Proton ==========
-      - name: Get VKD3D-Proton latest
-        id: vkd3d-version
-        uses: dsaltares/fetch-gh-release-asset@master
-        with:
-          repo: HansKristian-Work/vkd3d-proton
-          version: latest
-          file: "vkd3d-proton-.*\\.tar\\.zst"
-
-      - name: Convert VKD3D zst to tar.gz
+      - name: Download VKD3D-Proton
+        id: download-vkd3d
         run: |
-          # Find the downloaded .zst file
-          ZST_FILE=$(ls vkd3d-proton-*.tar.zst)
-          # Extract and convert to tar.gz
-          tar -I zstd -xf "$ZST_FILE"
+          RELEASE_JSON=$(curl -s "https://api.github.com/repos/HansKristian-Work/vkd3d-proton/releases/latest")
+          VKD3D_VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+          VKD3D_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | contains("tar.zst")) | .browser_download_url')
+          echo "Downloading VKD3D-Proton $VKD3D_VERSION"
+          curl -sL "$VKD3D_URL" -o vkd3d-proton.tar.zst
+          # Convert to tar.gz
+          tar -I zstd -xf vkd3d-proton.tar.zst
           FOLDER=$(ls -d vkd3d-proton-*/)
-          tar -czf "${ZST_FILE%.zst}.tar.gz" "$FOLDER"
-          rm -rf "$FOLDER"
+          tar -czf vkd3d-proton.tar.gz "$FOLDER"
+          rm -rf "$FOLDER" vkd3d-proton.tar.zst
+          echo "vkd3d_version=$VKD3D_VERSION" >> $GITHUB_OUTPUT
+          echo "$VKD3D_VERSION" > version_vkd3d.txt
 
       # ========== Turnip ==========
-      - name: Get Turnip latest
-        id: turnip-version
-        uses: dsaltares/fetch-gh-release-asset@master
-        with:
-          repo: whitebelyash/freedreno_turnip-CI
-          version: latest
-          file: "a8xx-gen8-.*\\.zip"
-
-      # Turnip - no rename needed (already has version)
+      - name: Download Turnip
+        id: download-turnip
+        run: |
+          RELEASE_JSON=$(curl -s "https://api.github.com/repos/whitebelyash/freedreno_turnip-CI/releases/latest")
+          TURNIP_VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+          TURNIP_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | contains("a8xx-gen8") and contains("zip")) | .browser_download_url')
+          echo "Downloading Turnip $TURNIP_VERSION"
+          curl -sL "$TURNIP_URL" -o turnip.zip
+          echo "turnip_version=$TURNIP_VERSION" >> $GITHUB_OUTPUT
+          echo "$TURNIP_VERSION" > version_turnip.txt
 
       # ========== Create Release ==========
       - name: Create release
@@ -78,7 +85,7 @@ jobs:
           DATE=$(date -u +%Y%m%d)
           RELEASE_TAG="v${DATE}"
           
-          # Check if release exists and delete
+          # Delete existing release if exists
           EXISTING=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/$RELEASE_TAG" | jq -r '.id // empty')
           
@@ -87,15 +94,10 @@ jobs:
               "https://api.github.com/repos/${{ github.repository }}/releases/$EXISTING"
           fi
           
-          # Create new release
+          # Create release
           RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"tag_name\": \"$RELEASE_TAG\",
-              \"name\": \"DroidDeck Assets $RELEASE_TAG\",
-              \"draft\": false,
-              \"prerelease\": false
-            }" \
+            -d "{\"tag_name\": \"$RELEASE_TAG\", \"name\": \"DroidDeck Assets $RELEASE_TAG\", \"draft\": false}" \
             "https://api.github.com/repos/${{ github.repository }}/releases")
           
           RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id')
@@ -103,63 +105,73 @@ jobs:
           echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
 
       # ========== Upload Assets ==========
-      - name: Upload PRoot
+      - name: Upload all assets
         run: |
+          PROOT_VER=$(cat version_proot.txt)
+          DXVK_VER=$(cat version_dxvk.txt)
+          VKD3D_VER=$(cat version_vkd3d.txt)
+          TURNIP_VER=$(cat version_turnip.txt)
+          RELEASE_ID=${{ steps.create-release.outputs.release_id }}
+          
+          # Upload PRoot
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/octet-stream" \
-            --data-binary @proot-*-aarch64-static \
-            "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create-release.outputs.release_id }}/assets?name=proot-${{ steps.proot-version.outputs.version }}-aarch64-static"
-
-      - name: Upload DXVK
-        run: |
+            --data-binary @proot \
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=proot-$PROOT_VER"
+          
+          # Upload DXVK
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/gzip" \
-            --data-binary @dxvk-*.tar.gz \
-            "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create-release.outputs.release_id }}/assets?name=dxvk-${{ steps.dxvk-version.outputs.version }}.tar.gz"
-
-      - name: Upload VKD3D
-        run: |
+            --data-binary @dxvk.tar.gz \
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=dxvk-$DXVK_VER.tar.gz"
+          
+          # Upload VKD3D
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/gzip" \
-            --data-binary @vkd3d-proton-*.tar.gz \
-            "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create-release.outputs.release_id }}/assets?name=vkd3d-proton-${{ steps.vkd3d-version.outputs.version }}.tar.gz"
-
-      - name: Upload Turnip
-        run: |
+            --data-binary @vkd3d-proton.tar.gz \
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=vkd3d-proton-$VKD3D_VER.tar.gz"
+          
+          # Upload Turnip
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/zip" \
-            --data-binary @a8xx-gen8-*.zip \
-            "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create-release.outputs.release_id }}/assets?name=turnip-${{ steps.turnip-version.outputs.version }}.zip"
+            --data-binary @turnip.zip \
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=turnip-$TURNIP_VER.zip"
 
-      # ========== Upload manifest.json ==========
+      # ========== Create and Upload manifest ==========
       - name: Create manifest
         run: |
+          PROOT_VER=$(cat version_proot.txt)
+          DXVK_VER=$(cat version_dxvk.txt)
+          VKD3D_VER=$(cat version_vkd3d.txt)
+          TURNIP_VER=$(cat version_turnip.txt)
+          
           cat > manifest.json << EOF
           {
             "version": "$(date -u +%Y-%m-%d)",
             "components": {
               "proot": {
-                "version": "${{ steps.proot-version.outputs.version }}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/$(date -u +%Y%m%d)/proot-${{ steps.proot-version.outputs.version }}-aarch64-static"
+                "version": "$PROOT_VER",
+                "url": "https://github.com/${{ github.repository }}/releases/download/$(date -u +%Y%m%d)/proot-$PROOT_VER"
               },
               "dxvk": {
-                "version": "${{ steps.dxvk-version.outputs.version }}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/$(date -u +%Y%m%d)/dxvk-${{ steps.dxvk-version.outputs.version }}.tar.gz"
+                "version": "$DXVK_VER",
+                "url": "https://github.com/${{ github.repository }}/releases/download/$(date -u +%Y%m%d)/dxvk-$DXVK_VER.tar.gz"
               },
               "vkd3d-proton": {
-                "version": "${{ steps.vkd3d-version.outputs.version }}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/$(date -u +%Y%m%d)/vkd3d-proton-${{ steps.vkd3d-version.outputs.version }}.tar.gz"
+                "version": "$VKD3D_VER",
+                "url": "https://github.com/${{ github.repository }}/releases/download/$(date -u +%Y%m%d)/vkd3d-proton-$VKD3D_VER.tar.gz"
               },
               "turnip": {
-                "version": "${{ steps.turnip-version.outputs.version }}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/$(date -u +%Y%m%d)/turnip-${{ steps.turnip-version.outputs.version }}.zip"
+                "version": "$TURNIP_VER",
+                "url": "https://github.com/${{ github.repository }}/releases/download/$(date -u +%Y%m%d)/turnip-$TURNIP_VER.zip"
               }
             },
             "note": "FEX and RootFS must be downloaded on device via FEXRootFSFetcher"
           }
           EOF
+          echo "manifest_created=true" >> $GITHUB_OUTPUT
 
-      - name: Upload manifest to release
+      - name: Upload manifest
         run: |
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/json" \
@@ -167,23 +179,25 @@ jobs:
             "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create-release.outputs.release_id }}/assets?name=manifest.json"
 
       # ========== Update manifest in repo ==========
-      - name: Commit manifest to repo
+      - name: Commit manifest
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add manifest.json
-          git commit -m "Update manifest with latest versions" || echo "No changes to commit"
+          git commit -m "Update manifest with latest versions" || echo "No changes"
           git push
 
       - name: Summary
         run: |
+          PROOT_VER=$(cat version_proot.txt)
+          DXVK_VER=$(cat version_dxvk.txt)
+          VKD3D_VER=$(cat version_vkd3d.txt)
+          TURNIP_VER=$(cat version_turnip.txt)
           echo "## Assets Updated"
           echo ""
           echo "| Component | Version |"
           echo "|----------|---------|"
-          echo "| PRoot | ${{ steps.proot-version.outputs.version }} |"
-          echo "| DXVK | ${{ steps.dxvk-version.outputs.version }} |"
-          echo "| VKD3D-Proton | ${{ steps.vkd3d-version.outputs.version }} |"
-          echo "| Turnip | ${{ steps.turnip-version.outputs.version }} |"
-          echo ""
-          echo "Release: https://github.com/${{ github.repository }}/releases/tag/$(date -u +%Y%m%d)"
+          echo "| PRoot | $PROOT_VER |"
+          echo "| DXVK | $DXVK_VER |"
+          echo "| VKD3D-Proton | $VKD3D_VER |"
+          echo "| Turnip | $TURNIP_VER |"
