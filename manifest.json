@@ -1,0 +1,40 @@
+{
+  "version": "1.0.0",
+  "components": {
+    "rootfs": {
+      "url": "https://github.com/DroidDeck/droiddeck-assets/releases/download/v1.0.0/rootfs.tar.gz",
+      "sha256": "CHANGEME",
+      "size": 30000000
+    },
+    "proot": {
+      "url": "https://github.com/DroidDeck/droiddeck-assets/releases/download/v1.0.0/proot.tar.gz",
+      "sha256": "CHANGEME",
+      "size": 5000000
+    },
+    "fex": {
+      "url": "https://github.com/FEX-Emu/FEX/releases/download/FEX-2604/FEX-2604-_arm64.tar.gz",
+      "sha256": "CHANGEME",
+      "size": 150000000
+    },
+    "wine": {
+      "url": "https://github.com/ValveSoftware/wine/releases/download/v10.0/wine-10.0-arm64.tar.gz",
+      "sha256": "CHANGEME",
+      "size": 200000000
+    },
+    "dxvk": {
+      "url": "https://github.com/doitsujin/dxvk/releases/download/v2.7.1/dxvk-2.7.1.tar.gz",
+      "sha256": "CHANGEME",
+      "size": 10000000
+    },
+    "vkd3d-proton": {
+      "url": "https://github.com/HansKristian-Work/vkd3d-proton/releases/download/v3.0b/vkd3d-proton-3.0b.tar.gz",
+      "sha256": "CHANGEME",
+      "size": 15000000
+    },
+    "turnip": {
+      "url": "https://github.com/nightmare321/freedreno_turnip/releases/download/v25.1.0/turnip-v25.1.0-android.tar.gz",
+      "sha256": "CHANGEME",
+      "size": 50000000
+    }
+  }
+}
