@@ -92,7 +92,7 @@ jobs:
           tar -xzf assets/rootfs.tar.gz -C assets/rootfs_extract
           
           cp /usr/bin/qemu-aarch64-static assets/rootfs_extract/usr/bin/
-          sudo chroot assets/rootfs_extract /bin/bash -c "apt-get update && apt-get install -y python3 && apt-get clean"
+          sudo chroot assets/rootfs_extract /bin/bash -c "apt-get update && apt-get install -y python3 curl wget && apt-get clean"
           rm assets/rootfs_extract/usr/bin/qemu-aarch64-static
           rm assets/rootfs.tar.gz
           tar -czf assets/rootfs.tar.gz -C assets/rootfs_extract .
