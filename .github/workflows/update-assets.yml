@@ -21,7 +21,7 @@ jobs:
 
       # ── 0. Install required tools ────────────────────────────────────────
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y zstd xz-utils qemu-user-static
+        run: sudo apt-get update && sudo apt-get install -y zstd xz-utils qemu-user-static mmdebstrap
 
       # ── 1. Fetch latest release tags ────────────────────────────────────
       - name: Fetch latest release versions
@@ -80,38 +80,18 @@ jobs:
 
       # ── 3. Build and Download assets ─────────────────────────────────────
 
-      # ROOTFS — Download from debuerreotype and inject Python3
+      # ROOTFS — Build from scratch with mmdebstrap
       - name: Process RootFS
         if: steps.changed.outputs.changed == 'true'
         run: |
-          echo "Downloading RootFS from debuerreotype..."
-          curl -fL "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/dist-arm64v8/bookworm/slim/oci/blobs/rootfs.tar.gz" -o assets/rootfs.tar.gz
-          
-          echo "Injecting Python3 into RootFS..."
+          echo "Creating RootFS using mmdebstrap..."
           mkdir -p assets/rootfs_extract
-          tar -xzf assets/rootfs.tar.gz -C assets/rootfs_extract
+          sudo mmdebstrap --arch=arm64 bookworm assets/rootfs_extract python3
           
-          # Ensure /tmp exists and is writable for apt
-          mkdir -p assets/rootfs_extract/tmp
-          chmod 1777 assets/rootfs_extract/tmp
+          # Copy qemu-static into the rootfs for later use on device
+          sudo cp /usr/bin/qemu-aarch64-static assets/rootfs_extract/usr/bin/
           
-          cp /usr/bin/qemu-aarch64-static assets/rootfs_extract/usr/bin/
-          
-          # Bind mount kernel filesystems to allow apt to function
-          sudo mount -t proc proc assets/rootfs_extract/proc
-          sudo mount -t sysfs sys assets/rootfs_extract/sys
-          sudo mount --bind /dev assets/rootfs_extract/dev
-          
-          # Run updates and install python3
-          sudo chroot assets/rootfs_extract /bin/bash -c "apt-get update && apt-get install -y python3 && apt-get clean"
-          
-          # Clean up mounts
-          sudo umount -l assets/rootfs_extract/proc
-          sudo umount -l assets/rootfs_extract/sys
-          sudo umount -l assets/rootfs_extract/dev
-          
-          sudo rm assets/rootfs_extract/usr/bin/qemu-aarch64-static
-          rm -f assets/rootfs.tar.gz
+          # Archive the result
           sudo tar -czf assets/rootfs.tar.gz -C assets/rootfs_extract .
           sudo chown $(id -u):$(id -g) assets/rootfs.tar.gz
           sudo rm -rf assets/rootfs_extract
