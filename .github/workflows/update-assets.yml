@@ -110,10 +110,11 @@ jobs:
           sudo umount -l assets/rootfs_extract/sys
           sudo umount -l assets/rootfs_extract/dev
           
-          rm assets/rootfs_extract/usr/bin/qemu-aarch64-static
-          rm assets/rootfs.tar.gz
-          tar -czf assets/rootfs.tar.gz -C assets/rootfs_extract .
-          rm -rf assets/rootfs_extract
+          sudo rm assets/rootfs_extract/usr/bin/qemu-aarch64-static
+          rm -f assets/rootfs.tar.gz
+          sudo tar -czf assets/rootfs.tar.gz -C assets/rootfs_extract .
+          sudo chown $(id -u):$(id -g) assets/rootfs.tar.gz
+          sudo rm -rf assets/rootfs_extract
 
       # PROOT
       - name: Download PRoot binary
