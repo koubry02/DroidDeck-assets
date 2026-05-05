@@ -27,7 +27,11 @@ jobs:
       - name: Fetch latest release versions
         id: versions
         run: |
-          proot=$(gh api repos/proot-me/proot/releases/latest --jq '.tag_name')
+          # PRoot: track Termux package version (proot-me/proot is dormant since 2023;
+          # the Termux fork updates independently and is the actual binary source)
+          proot=$(curl -fsSL \
+            "https://packages-cf.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz" \
+            | zcat | awk '/^Package: proot$/{found=1} found && /^Version:/{print $2; exit}')
           dxvk=$(gh api repos/doitsujin/dxvk/releases/latest --jq '.tag_name')
           vkd3d=$(gh api repos/HansKristian-Work/vkd3d-proton/releases/latest --jq '.tag_name')
           turnip=$(gh api repos/whitebelyash/freedreno_turnip-CI/releases/latest --jq '.tag_name')
