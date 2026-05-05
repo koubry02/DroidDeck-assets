@@ -2,7 +2,7 @@ name: Update DroidDeck Assets
 
 on:
   schedule:
-    - cron: '0 3 * * *'   # runs daily at 03:00 UTC
+    - cron: '0 3 1 * *'   # runs on the 1st of every month at 03:00 UTC
   workflow_dispatch:       # allows manual trigger from GitHub UI
 
 permissions:
@@ -21,7 +21,7 @@ jobs:
 
       # ── 0. Install required tools ────────────────────────────────────────
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y zstd xz-utils qemu-user-static mmdebstrap
+        run: sudo apt-get update && sudo apt-get install -y zstd xz-utils qemu-user-static mmdebstrap debian-archive-keyring
 
       # ── 1. Fetch latest release tags ────────────────────────────────────
       - name: Fetch latest release versions
@@ -86,7 +86,7 @@ jobs:
         run: |
           echo "Creating RootFS using mmdebstrap..."
           # Do not mkdir assets/rootfs_extract; let mmdebstrap create the target directory
-          sudo mmdebstrap --variant=minbase --architectures=arm64 --include=python3 bookworm assets/rootfs_extract http://deb.debian.org/debian
+          sudo mmdebstrap --variant=minbase --architectures=arm64 --include=python3 --keyring=/usr/share/keyrings/debian-archive-keyring.gpg bookworm assets/rootfs_extract http://deb.debian.org/debian
           
           # Copy qemu-static into the rootfs for later use on device
           sudo cp /usr/bin/qemu-aarch64-static assets/rootfs_extract/usr/bin/
