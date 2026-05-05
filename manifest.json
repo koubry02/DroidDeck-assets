@@ -1,10 +1,16 @@
 {
-  "updated_at": "2026-05-05T09:25:16Z",
+  "updated_at": "2026-05-05T14:34:34Z",
+  "rootfs": {
+    "version": "bookworm-slim",
+    "asset": "rootfs.tar.gz",
+    "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260505/rootfs.tar.gz",
+    "sha256": "d9d7ce055d7b9a311743f96dc3c06c41a527dac64672beb73bbbfb8ef0a979dc"
+  },
   "proot": {
     "version": "5.1.107-70",
     "asset": "proot.tar.gz",
     "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260505/proot.tar.gz",
-    "sha256": "22e10108ba9d1f668fd214b0c23fe90755c1d0cbb24d9ada765fa109bfca1ab1"
+    "sha256": "a0a85bc4835ab18c15bb7b8611e0c7b77e8bcafb4886b57837273eeb57b519fb"
   },
   "dxvk": {
     "version": "v2.7.1",
@@ -22,7 +28,7 @@
     "version": "tu_v25.3",
     "asset": "turnip.tar.gz",
     "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260505/turnip.tar.gz",
-    "sha256": "6f726b0d02af7fcb2a1510ebbdb55a640ab10789c5c3ea77dab3a273177864c0"
+    "sha256": "ff83e23061372539d83bf484968d2a60443a54904de10b0f095222780f11dffe"
   },
   "fex": {
     "version": "FEX-2604",
