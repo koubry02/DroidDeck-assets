@@ -27,7 +27,11 @@ jobs:
       - name: Fetch latest release versions
         id: versions
         run: |
-          proot=$(gh api repos/proot-me/proot/releases/latest --jq '.tag_name')
+          # PRoot: track Termux package version (proot-me/proot is dormant since 2023;
+          # the Termux fork updates independently and is the actual binary source)
+          proot=$(curl -fsSL \
+            "https://packages-cf.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz" \
+            | zcat | awk '/^Package: proot$/{found=1} found && /^Version:/{print $2; exit}')
           dxvk=$(gh api repos/doitsujin/dxvk/releases/latest --jq '.tag_name')
           vkd3d=$(gh api repos/HansKristian-Work/vkd3d-proton/releases/latest --jq '.tag_name')
           turnip=$(gh api repos/whitebelyash/freedreno_turnip-CI/releases/latest --jq '.tag_name')
@@ -95,38 +99,59 @@ jobs:
           tar -czf assets/proot.tar.gz -C assets proot-aarch64-static
           rm assets/proot-aarch64-static
 
-      # DXVK — real asset: dxvk-{version}.tar.gz
+      # DXVK — asset: dxvk-{version}.tar.gz  (no 'v' prefix in filename)
       - name: Download DXVK archive
         if: steps.changed.outputs.changed == 'true'
         run: |
-          gh release download "${{ steps.versions.outputs.dxvk }}" \
+          TAG="${{ steps.versions.outputs.dxvk }}"
+          gh release download "$TAG" \
             --repo doitsujin/dxvk \
-            --pattern 'dxvk-*.tar.gz' \
-            --dir assets/
-          mv assets/dxvk-*.tar.gz assets/dxvk.tar.gz
+            --pattern '*.tar.gz' \
+            --dir assets/ \
+            --clobber
+          echo "Assets after DXVK download:"; ls -1 assets/
+          DXVK_FILE=$(find assets -maxdepth 1 -name 'dxvk-*.tar.gz' | head -1)
+          if [ -z "$DXVK_FILE" ]; then
+            echo "ERROR: no dxvk-*.tar.gz found for tag $TAG"; exit 1
+          fi
+          mv "$DXVK_FILE" assets/dxvk.tar.gz
 
       # VKD3D-PROTON — upstream ships .tar.zst; recompress to .tar.gz
       - name: Download VKD3D-Proton archive
         if: steps.changed.outputs.changed == 'true'
         run: |
-          gh release download "${{ steps.versions.outputs.vkd3d }}" \
+          TAG="${{ steps.versions.outputs.vkd3d }}"
+          gh release download "$TAG" \
             --repo HansKristian-Work/vkd3d-proton \
-            --pattern 'vkd3d-proton-*.tar.zst' \
-            --dir assets/
-          zstd -d assets/vkd3d-proton-*.tar.zst --stdout | gzip > assets/vkd3d-proton.tar.gz
-          rm -f assets/vkd3d-proton-*.tar.zst
+            --pattern '*.tar.zst' \
+            --dir assets/ \
+            --clobber
+          echo "Assets after VKD3D download:"; ls -1 assets/
+          VKD3D_FILE=$(find assets -maxdepth 1 -name 'vkd3d-proton-*.tar.zst' | head -1)
+          if [ -z "$VKD3D_FILE" ]; then
+            echo "ERROR: no vkd3d-proton-*.tar.zst found for tag $TAG"; exit 1
+          fi
+          zstd -d "$VKD3D_FILE" --stdout | gzip > assets/vkd3d-proton.tar.gz
+          rm -f "$VKD3D_FILE"
 
       # TURNIP — .zip repacked to .tar.gz for consistency
       - name: Download Turnip archive
         if: steps.changed.outputs.changed == 'true'
         run: |
-          gh release download "${{ steps.versions.outputs.turnip }}" \
+          TAG="${{ steps.versions.outputs.turnip }}"
+          gh release download "$TAG" \
             --repo whitebelyash/freedreno_turnip-CI \
             --pattern '*.zip' \
-            --dir assets/
-          unzip -q assets/*.zip -d assets/turnip_extracted
+            --dir assets/ \
+            --clobber
+          echo "Assets after Turnip download:"; ls -1 assets/
+          TURNIP_FILE=$(find assets -maxdepth 1 -name '*.zip' | head -1)
+          if [ -z "$TURNIP_FILE" ]; then
+            echo "ERROR: no .zip found for tag $TAG"; exit 1
+          fi
+          unzip -q "$TURNIP_FILE" -d assets/turnip_extracted
           tar -czf assets/turnip.tar.gz -C assets/turnip_extracted .
-          rm -rf assets/*.zip assets/turnip_extracted
+          rm -rf "$TURNIP_FILE" assets/turnip_extracted
 
       # FEX — official install script from main branch
       - name: Download FEX install script
