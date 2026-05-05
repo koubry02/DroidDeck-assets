@@ -86,7 +86,7 @@ jobs:
         run: |
           echo "Creating RootFS using mmdebstrap..."
           # Do not mkdir assets/rootfs_extract; let mmdebstrap create the target directory
-          sudo mmdebstrap --arch=arm64 --mirror=http://deb.debian.org/debian bookworm assets/rootfs_extract python3
+          sudo mmdebstrap --variant=minbase --architectures=arm64 --include=python3 bookworm assets/rootfs_extract http://deb.debian.org/debian
           
           # Copy qemu-static into the rootfs for later use on device
           sudo cp /usr/bin/qemu-aarch64-static assets/rootfs_extract/usr/bin/
