@@ -6,7 +6,7 @@ on:
   workflow_dispatch:       # allows manual trigger from GitHub UI
 
 permissions:
-  contents: write          # needed to create releases and push tags
+  contents: write          # needed to create releases, push tags, and commit manifest
 
 jobs:
   update-assets:
@@ -21,46 +21,45 @@ jobs:
 
       # ── 0. Install required tools ────────────────────────────────────────
       - name: Install dependencies
-        run: |
-          sudo apt-get install -y zstd
-          # zstd needed to recompress vkd3d-proton .tar.zst → .tar.gz
-          # unzip and jq are pre-installed on ubuntu-latest
+        run: sudo apt-get install -y zstd
 
       # ── 1. Fetch latest release tags ────────────────────────────────────
       - name: Fetch latest release versions
         id: versions
         run: |
-          # DXVK, VKD3D-Proton, Turnip have real GitHub Releases with binaries.
-          # PRoot tag is fetched for version tracking only — binary comes from GitLab.
           proot=$(gh api repos/proot-me/proot/releases/latest --jq '.tag_name')
           dxvk=$(gh api repos/doitsujin/dxvk/releases/latest --jq '.tag_name')
           vkd3d=$(gh api repos/HansKristian-Work/vkd3d-proton/releases/latest --jq '.tag_name')
           turnip=$(gh api repos/whitebelyash/freedreno_turnip-CI/releases/latest --jq '.tag_name')
+          fex=$(gh api repos/FEX-Emu/FEX/releases/latest --jq '.tag_name')
 
           echo "proot=$proot"   >> "$GITHUB_OUTPUT"
           echo "dxvk=$dxvk"     >> "$GITHUB_OUTPUT"
           echo "vkd3d=$vkd3d"   >> "$GITHUB_OUTPUT"
           echo "turnip=$turnip" >> "$GITHUB_OUTPUT"
+          echo "fex=$fex"       >> "$GITHUB_OUTPUT"
 
-          echo "Fetched: proot=$proot | dxvk=$dxvk | vkd3d=$vkd3d | turnip=$turnip"
+          echo "Fetched: proot=$proot | dxvk=$dxvk | vkd3d=$vkd3d | turnip=$turnip | fex=$fex"
 
       # ── 2. Compare with current manifest (skip if nothing changed) ──────
       - name: Check for version changes
         id: changed
         run: |
           if [ -f manifest.json ]; then
-            cur_proot=$(jq  -r '.proot.version'  manifest.json)
-            cur_dxvk=$(jq   -r '.dxvk.version'   manifest.json)
-            cur_vkd3d=$(jq  -r '.vkd3d.version'  manifest.json)
-            cur_turnip=$(jq -r '.turnip.version' manifest.json)
+            cur_proot=$(jq  -r '.proot.version  // empty' manifest.json)
+            cur_dxvk=$(jq   -r '.dxvk.version   // empty' manifest.json)
+            cur_vkd3d=$(jq  -r '.vkd3d.version  // empty' manifest.json)
+            cur_turnip=$(jq -r '.turnip.version // empty' manifest.json)
+            cur_fex=$(jq    -r '.fex.version    // empty' manifest.json)
           else
-            cur_proot="" cur_dxvk="" cur_vkd3d="" cur_turnip=""
+            cur_proot="" cur_dxvk="" cur_vkd3d="" cur_turnip="" cur_fex=""
           fi
 
           if [[ "$cur_proot"  == "${{ steps.versions.outputs.proot }}"  &&
                 "$cur_dxvk"   == "${{ steps.versions.outputs.dxvk }}"   &&
                 "$cur_vkd3d"  == "${{ steps.versions.outputs.vkd3d }}"  &&
-                "$cur_turnip" == "${{ steps.versions.outputs.turnip }}" ]]; then
+                "$cur_turnip" == "${{ steps.versions.outputs.turnip }}" &&
+                "$cur_fex"    == "${{ steps.versions.outputs.fex }}" ]]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "All versions up-to-date — nothing to do."
           else
@@ -74,74 +73,54 @@ jobs:
 
       # ── 3. Download assets ───────────────────────────────────────────────
 
-      # PROOT
-      # proot-me/proot only publishes x86_64 prebuilts via GitLab CI.
-      # For aarch64 we use the Termux fork (https://github.com/termux/proot)
-      # which ships an actively maintained aarch64 .deb on packages-cf.termux.dev.
-      # Strategy: query the apt Packages index → get the .deb URL → extract
-      # the binary with ar + tar (no dpkg needed on ubuntu-latest).
+      # PROOT — Termux aarch64 .deb (proot-me/proot only ships x86_64 prebuilts)
       - name: Download PRoot binary (Termux aarch64 package)
         if: steps.changed.outputs.changed == 'true'
         run: |
-          # 1. Resolve the latest proot .deb URL from Termux apt index
-          PKG_URL=$(curl -fsSL             "https://packages-cf.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz"             | zcat             | awk '/^Package: proot$/{found=1} found && /^Filename:/{print "https://packages-cf.termux.dev/apt/termux-main/"$2; exit}')
+          PKG_URL=$(curl -fsSL \
+            "https://packages-cf.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz" \
+            | zcat \
+            | awk '/^Package: proot$/{found=1} found && /^Filename:/{print "https://packages-cf.termux.dev/apt/termux-main/"$2; exit}')
           echo "Resolved: $PKG_URL"
 
-          # 2. Download the .deb
           curl -fL "$PKG_URL" -o /tmp/proot.deb
-
-          # 3. Extract binary (ar unpacks the .deb; data.tar.* holds the files)
           mkdir -p /tmp/proot_extract
           ar x /tmp/proot.deb --output /tmp/proot_extract
           DATA=$(ls /tmp/proot_extract/data.tar.*)
           tar -xf "$DATA" -C /tmp/proot_extract
           PROOT_BIN=$(find /tmp/proot_extract -name proot -type f | head -1)
-          echo "Extracted binary: $PROOT_BIN"
 
-          # 4. Pack into tar.gz
           cp "$PROOT_BIN" assets/proot-aarch64-static
           chmod +x assets/proot-aarch64-static
           tar -czf assets/proot.tar.gz -C assets proot-aarch64-static
           rm assets/proot-aarch64-static
 
-      # DXVK
-      # Real asset filename: dxvk-{version}.tar.gz  (e.g. dxvk-2.7.1.tar.gz)
-      # Note: GitHub also auto-generates "Source code.tar.gz" — the explicit
-      # prefix pattern 'dxvk-*.tar.gz' avoids matching that source archive.
+      # DXVK — real asset: dxvk-{version}.tar.gz
       - name: Download DXVK archive
         if: steps.changed.outputs.changed == 'true'
         run: |
-          TAG="${{ steps.versions.outputs.dxvk }}"
-          gh release download "$TAG" \
+          gh release download "${{ steps.versions.outputs.dxvk }}" \
             --repo doitsujin/dxvk \
             --pattern 'dxvk-*.tar.gz' \
             --dir assets/
           mv assets/dxvk-*.tar.gz assets/dxvk.tar.gz
 
-      # VKD3D-PROTON
-      # Real asset filename: vkd3d-proton-{version}.tar.zst
-      # (e.g. vkd3d-proton-3.0b.tar.zst) — ALWAYS .tar.zst, never .tar.gz.
-      # Recompressed to .tar.gz via streaming pipe (no full disk extraction).
+      # VKD3D-PROTON — upstream ships .tar.zst; recompress to .tar.gz
       - name: Download VKD3D-Proton archive
         if: steps.changed.outputs.changed == 'true'
         run: |
-          TAG="${{ steps.versions.outputs.vkd3d }}"
-          gh release download "$TAG" \
+          gh release download "${{ steps.versions.outputs.vkd3d }}" \
             --repo HansKristian-Work/vkd3d-proton \
             --pattern 'vkd3d-proton-*.tar.zst' \
             --dir assets/
           zstd -d assets/vkd3d-proton-*.tar.zst --stdout | gzip > assets/vkd3d-proton.tar.gz
           rm -f assets/vkd3d-proton-*.tar.zst
 
-      # TURNIP
-      # Real asset filename: mesa-turnip-{arch}-V{build}.zip
-      # (e.g. mesa-turnip-aarch64-V25.zip) — always a single .zip per release.
-      # Repacked to .tar.gz for consistency.
+      # TURNIP — .zip repacked to .tar.gz for consistency
       - name: Download Turnip archive
         if: steps.changed.outputs.changed == 'true'
         run: |
-          TAG="${{ steps.versions.outputs.turnip }}"
-          gh release download "$TAG" \
+          gh release download "${{ steps.versions.outputs.turnip }}" \
             --repo whitebelyash/freedreno_turnip-CI \
             --pattern '*.zip' \
             --dir assets/
@@ -149,36 +128,75 @@ jobs:
           tar -czf assets/turnip.tar.gz -C assets/turnip_extracted .
           rm -rf assets/*.zip assets/turnip_extracted
 
-      # ── 4. Generate manifest.json ────────────────────────────────────────
-      - name: Update manifest.json
+      # FEX — official install script from main branch
+      - name: Download FEX install script
         if: steps.changed.outputs.changed == 'true'
         run: |
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          jq -n \
-            --arg proot_ver  "${{ steps.versions.outputs.proot }}"  \
-            --arg dxvk_ver   "${{ steps.versions.outputs.dxvk }}"   \
-            --arg vkd3d_ver  "${{ steps.versions.outputs.vkd3d }}"  \
-            --arg turnip_ver "${{ steps.versions.outputs.turnip }}" \
-            --arg ts         "$TIMESTAMP" \
-            '{
-              updated_at: $ts,
-              proot:  { version: $proot_ver,  asset: "proot.tar.gz" },
-              dxvk:   { version: $dxvk_ver,   asset: "dxvk.tar.gz" },
-              vkd3d:  { version: $vkd3d_ver,  asset: "vkd3d-proton.tar.gz" },
-              turnip: { version: $turnip_ver, asset: "turnip.tar.gz" }
-            }' > manifest.json
+          curl -fsSL \
+            "https://raw.githubusercontent.com/FEX-Emu/FEX/main/Scripts/InstallFEX.py" \
+            -o assets/InstallFEX.py
 
-          echo "Generated manifest.json:"
-          cat manifest.json
+      # ── 4. Compute SHA256 checksums ──────────────────────────────────────
+      - name: Compute SHA256 checksums
+        if: steps.changed.outputs.changed == 'true'
+        id: checksums
+        run: |
+          sha_proot=$(sha256sum  assets/proot.tar.gz        | awk '{print $1}')
+          sha_dxvk=$(sha256sum   assets/dxvk.tar.gz         | awk '{print $1}')
+          sha_vkd3d=$(sha256sum  assets/vkd3d-proton.tar.gz | awk '{print $1}')
+          sha_turnip=$(sha256sum assets/turnip.tar.gz       | awk '{print $1}')
+          sha_fex=$(sha256sum    assets/InstallFEX.py       | awk '{print $1}')
+
+          echo "sha_proot=$sha_proot"   >> "$GITHUB_OUTPUT"
+          echo "sha_dxvk=$sha_dxvk"     >> "$GITHUB_OUTPUT"
+          echo "sha_vkd3d=$sha_vkd3d"   >> "$GITHUB_OUTPUT"
+          echo "sha_turnip=$sha_turnip" >> "$GITHUB_OUTPUT"
+          echo "sha_fex=$sha_fex"       >> "$GITHUB_OUTPUT"
 
       # ── 5. Determine release tag ─────────────────────────────────────────
       - name: Compute release tag
         if: steps.changed.outputs.changed == 'true'
         id: tag
-        run: |
-          echo "tag=assets-$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+        run: echo "tag=assets-$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
 
-      # ── 6. Publish GitHub Release ────────────────────────────────────────
+      # ── 6. Generate manifest.json ────────────────────────────────────────
+      - name: Update manifest.json
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          BASE_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+
+          jq -n \
+            --arg ts         "$TIMESTAMP"                              \
+            --arg proot_ver  "${{ steps.versions.outputs.proot }}"    \
+            --arg dxvk_ver   "${{ steps.versions.outputs.dxvk }}"     \
+            --arg vkd3d_ver  "${{ steps.versions.outputs.vkd3d }}"    \
+            --arg turnip_ver "${{ steps.versions.outputs.turnip }}"   \
+            --arg fex_ver    "${{ steps.versions.outputs.fex }}"      \
+            --arg proot_url  "${BASE_URL}/proot.tar.gz"               \
+            --arg dxvk_url   "${BASE_URL}/dxvk.tar.gz"               \
+            --arg vkd3d_url  "${BASE_URL}/vkd3d-proton.tar.gz"        \
+            --arg turnip_url "${BASE_URL}/turnip.tar.gz"              \
+            --arg fex_url    "${BASE_URL}/InstallFEX.py"              \
+            --arg sha_proot  "${{ steps.checksums.outputs.sha_proot }}"  \
+            --arg sha_dxvk   "${{ steps.checksums.outputs.sha_dxvk }}"   \
+            --arg sha_vkd3d  "${{ steps.checksums.outputs.sha_vkd3d }}"  \
+            --arg sha_turnip "${{ steps.checksums.outputs.sha_turnip }}" \
+            --arg sha_fex    "${{ steps.checksums.outputs.sha_fex }}"    \
+            '{
+              updated_at: $ts,
+              proot:  { version: $proot_ver,  asset: "proot.tar.gz",        url: $proot_url,  sha256: $sha_proot  },
+              dxvk:   { version: $dxvk_ver,   asset: "dxvk.tar.gz",         url: $dxvk_url,   sha256: $sha_dxvk   },
+              vkd3d:  { version: $vkd3d_ver,  asset: "vkd3d-proton.tar.gz", url: $vkd3d_url,  sha256: $sha_vkd3d  },
+              turnip: { version: $turnip_ver, asset: "turnip.tar.gz",        url: $turnip_url, sha256: $sha_turnip },
+              fex:    { version: $fex_ver,    asset: "InstallFEX.py",        url: $fex_url,    sha256: $sha_fex    }
+            }' > manifest.json
+
+          echo "Generated manifest.json:"
+          cat manifest.json
+
+      # ── 7. Publish GitHub Release ────────────────────────────────────────
       - name: Create GitHub Release
         if: steps.changed.outputs.changed == 'true'
         run: |
@@ -198,10 +216,20 @@ jobs:
           | DXVK | ${{ steps.versions.outputs.dxvk }} |
           | VKD3D-Proton | ${{ steps.versions.outputs.vkd3d }} |
           | Turnip | ${{ steps.versions.outputs.turnip }} |
-
-          > FEX and RootFS must be set up manually on the device — see README." \
+          | FEX | ${{ steps.versions.outputs.fex }} |" \
             assets/proot.tar.gz \
             assets/dxvk.tar.gz \
             assets/vkd3d-proton.tar.gz \
             assets/turnip.tar.gz \
+            assets/InstallFEX.py \
             manifest.json
+
+      # ── 8. Commit updated manifest.json back to repo ─────────────────────
+      - name: Commit manifest.json
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "chore: update manifest for ${{ steps.tag.outputs.tag }}"
+          git push origin HEAD
