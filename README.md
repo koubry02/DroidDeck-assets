@@ -1,47 +1,37 @@
 # DroidDeck Assets
 
-Binary assets for DroidDeck app - downloaded automatically on first launch.
+Binary assets for the DroidDeck app — downloaded automatically on first launch.
 
 ## Auto-Update
 
-This repository uses GitHub Actions (`.github/workflows/update-assets.yml`) to automatically fetch the latest releases:
+GitHub Actions runs daily at 03:00 UTC (`.github/workflows/update-assets.yml`).
+When any upstream version changes, the workflow:
+1. Downloads the latest binaries
+2. Computes SHA256 checksums
+3. Creates a dated GitHub Release (`assets-YYYYMMDD`) with all files
+4. Commits the updated `manifest.json` back to this repo
 
-| Component | Source | Auto-Updated |
-|-----------|--------|--------------|
-| PRoot | proot-me/proot v5.3.0 | ✅ |
-| DXVK | doitsujin/dxvk v2.7.1 | ✅ |
-| VKD3D-Proton | HansKristian-Work v3.0b | ✅ |
-| Turnip | whitebelyash/freedreno_turnip-CI | ✅ |
-| FEX | FEX-Emu/FEX | ❌ Manual (device) |
-| RootFS | FEXRootFSFetcher | ❌ Manual (device) |
+| Component | Source | Release asset |
+|-----------|--------|---------------|
+| PRoot (aarch64) | Termux package mirror | `proot.tar.gz` |
+| DXVK | doitsujin/dxvk | `dxvk.tar.gz` |
+| VKD3D-Proton | HansKristian-Work/vkd3d-proton | `vkd3d-proton.tar.gz` |
+| Turnip | whitebelyash/freedreno_turnip-CI | `turnip.tar.gz` |
+| FEX install script | FEX-Emu/FEX | `InstallFEX.py` |
 
-## Manual Setup (FEX + RootFS)
+## manifest.json
 
-FEX and RootFS must be downloaded on the Android device:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/FEX-Emu/FEX/main/Scripts/InstallFEX.py | python3
-```
-
-This script:
-1. Installs FEX binaries
-2. Downloads x86_64 RootFS for running Windows programs
-
-## Release Format
-
-Assets are in GitHub Releases v1.0.0:
-- `proot-v5.3.0-aarch64-static` - PRoot binary
-- `dxvk.tar.gz` - D3D11→Vulkan
-- `vkd3d-proton.tar.gz` - D3D12→Vulkan  
-- `turnip.zip` - Mesa Turnip GPU driver
-- `manifest.json` - Version info
-
-## Usage
-
-The DroidDeck app downloads these assets automatically on first launch via `tauri-plugin-container`.
+Every release includes `manifest.json` with versions, download URLs, and SHA256 checksums for all assets.
+The committed `manifest.json` in this repo tracks the last-known versions so the workflow skips
+unnecessary runs when nothing has changed.
 
 ## Manual Trigger
 
-To manually trigger asset update:
-1. Go to https://github.com/koubry02/droiddeck-assets/actions
-2. Run "Update Assets" workflow
+1. Go to the **Actions** tab in this repository
+2. Select **Update DroidDeck Assets**
+3. Click **Run workflow**
+
+## Usage
+
+The DroidDeck app downloads assets automatically on first launch via `tauri-plugin-container`,
+using the URLs and checksums from `manifest.json`.
