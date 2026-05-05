@@ -1,8 +1,33 @@
 {
-  "updated_at": "",
-  "proot":  { "version": "", "asset": "proot.tar.gz",        "url": "", "sha256": "" },
-  "dxvk":   { "version": "", "asset": "dxvk.tar.gz",         "url": "", "sha256": "" },
-  "vkd3d":  { "version": "", "asset": "vkd3d-proton.tar.gz", "url": "", "sha256": "" },
-  "turnip": { "version": "", "asset": "turnip.tar.gz",        "url": "", "sha256": "" },
-  "fex":    { "version": "", "asset": "InstallFEX.py",        "url": "", "sha256": "" }
+  "updated_at": "2026-05-05T09:25:16Z",
+  "proot": {
+    "version": "5.1.107-70",
+    "asset": "proot.tar.gz",
+    "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260505/proot.tar.gz",
+    "sha256": "22e10108ba9d1f668fd214b0c23fe90755c1d0cbb24d9ada765fa109bfca1ab1"
+  },
+  "dxvk": {
+    "version": "v2.7.1",
+    "asset": "dxvk.tar.gz",
+    "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260505/dxvk.tar.gz",
+    "sha256": "bf0ebbc4bcdee52811b084abbedba51ccaaa304810ec633b76554e91957d2e20"
+  },
+  "vkd3d": {
+    "version": "v3.0b",
+    "asset": "vkd3d-proton.tar.gz",
+    "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260505/vkd3d-proton.tar.gz",
+    "sha256": "90a595d139db32dca1eeffd4fe6298ccc3a0063797b26790b84bccecf9d47eed"
+  },
+  "turnip": {
+    "version": "tu_v25.3",
+    "asset": "turnip.tar.gz",
+    "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260505/turnip.tar.gz",
+    "sha256": "6f726b0d02af7fcb2a1510ebbdb55a640ab10789c5c3ea77dab3a273177864c0"
+  },
+  "fex": {
+    "version": "FEX-2604",
+    "asset": "InstallFEX.py",
+    "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260505/InstallFEX.py",
+    "sha256": "36320715ca484b6a02da21e144b8b007f54afb22a7c5650cbeb92c5f4f8f65cf"
+  }
 }
