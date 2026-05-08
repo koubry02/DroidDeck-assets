@@ -150,9 +150,10 @@ jobs:
         run: |
           mkdir -p assets/fex_binaries
           
+          # All packages are in the fex-emu-armv8.0/ subdirectory
           curl -fL "https://ppa.launchpadcontent.net/fex-emu/fex/ubuntu/pool/main/f/fex-emu-armv8.0/fex-emu-armv8.0_2604~r_arm64.deb" -o assets/fex_binaries/fex-emu-armv8.0.deb
-          curl -fL "https://ppa.launchpadcontent.net/fex-emu/fex/ubuntu/pool/main/f/fex-emu-binfmt32/fex-emu-binfmt32_2604~r_arm64.deb" -o assets/fex_binaries/fex-emu-binfmt32.deb
-          curl -fL "https://ppa.launchpadcontent.net/fex-emu/fex/ubuntu/pool/main/f/fex-emu-binfmt64/fex-emu-binfmt64_2604~r_arm64.deb" -o assets/fex_binaries/fex-emu-binfmt64.deb
+          curl -fL "https://ppa.launchpadcontent.net/fex-emu/fex/ubuntu/pool/main/f/fex-emu-armv8.0/fex-emu-binfmt32_2604~r_arm64.deb" -o assets/fex_binaries/fex-emu-binfmt32.deb
+          curl -fL "https://ppa.launchpadcontent.net/fex-emu/fex/ubuntu/pool/main/f/fex-emu-armv8.0/fex-emu-binfmt64_2604~r_arm64.deb" -o assets/fex_binaries/fex-emu-binfmt64.deb
           
           mkdir -p assets/fex_extracted
           for deb in assets/fex_binaries/*.deb; do
