@@ -138,11 +138,30 @@ jobs:
           tar -czf assets/turnip.tar.gz -C assets/turnip_extracted .
           rm -rf "$TURNIP_FILE" assets/turnip_extracted
 
-      # FEX install script
+# FEX install script
       - name: Download FEX install script
         if: steps.changed.outputs.changed == 'true'
         run: |
           curl -fsSL "https://raw.githubusercontent.com/FEX-Emu/FEX/main/Scripts/InstallFEX.py" -o assets/InstallFEX.py
+
+      # FEX binaries from Ubuntu PPA (ARM64)
+      - name: Download FEX binaries
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          mkdir -p assets/fex_binaries
+          
+          curl -fL "https://ppa.launchpadcontent.net/fex-emu/fex/ubuntu/pool/main/f/fex-emu-armv8.0/fex-emu-armv8.0_2604~r_arm64.deb" -o assets/fex_binaries/fex-emu-armv8.0.deb
+          curl -fL "https://ppa.launchpadcontent.net/fex-emu/fex/ubuntu/pool/main/f/fex-emu-binfmt32/fex-emu-binfmt32_2604~r_arm64.deb" -o assets/fex_binaries/fex-emu-binfmt32.deb
+          curl -fL "https://ppa.launchpadcontent.net/fex-emu/fex/ubuntu/pool/main/f/fex-emu-binfmt64/fex-emu-binfmt64_2604~r_arm64.deb" -o assets/fex_binaries/fex-emu-binfmt64.deb
+          
+          mkdir -p assets/fex_extracted
+          for deb in assets/fex_binaries/*.deb; do
+            dpkg -x "$deb" assets/fex_extracted/
+          done
+          
+          tar -czf assets/fex-binaries.tar.gz -C assets/fex_extracted ./usr
+          
+          rm -rf assets/fex_binaries assets/fex_extracted
 
       # ── 4. Compute SHA256 checksums ──────────────────────────────────────
       - name: Compute SHA256 checksums
@@ -155,6 +174,7 @@ jobs:
           echo "sha_vkd3d=$(sha256sum  assets/vkd3d-proton.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "sha_turnip=$(sha256sum assets/turnip.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "sha_fex=$(sha256sum    assets/InstallFEX.py | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "sha_fex_binaries=$(sha256sum assets/fex-binaries.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       # ── 5. Determine release tag ─────────────────────────────────────────
       - name: Compute release tag
@@ -184,12 +204,14 @@ jobs:
             --arg vkd3d_url  "${BASE_URL}/vkd3d-proton.tar.gz"         \
             --arg turnip_url "${BASE_URL}/turnip.tar.gz"               \
             --arg fex_url    "${BASE_URL}/InstallFEX.py"               \
+            --arg fex_bin_url "${BASE_URL}/fex-binaries.tar.gz"      \
             --arg sha_rootfs "${{ steps.checksums.outputs.sha_rootfs }}" \
             --arg sha_proot  "${{ steps.checksums.outputs.sha_proot }}"  \
             --arg sha_dxvk   "${{ steps.checksums.outputs.sha_dxvk }}"   \
             --arg sha_vkd3d  "${{ steps.checksums.outputs.sha_vkd3d }}"  \
             --arg sha_turnip "${{ steps.checksums.outputs.sha_turnip }}" \
             --arg sha_fex    "${{ steps.checksums.outputs.sha_fex }}"    \
+            --arg sha_fex_binaries "${{ steps.checksums.outputs.sha_fex_binaries }}" \
             '{
               updated_at: $ts,
               rootfs: { version: $rootfs_ver, asset: "rootfs.tar.gz", url: $rootfs_url, sha256: $sha_rootfs },
@@ -197,7 +219,8 @@ jobs:
               dxvk:   { version: $dxvk_ver,   asset: "dxvk.tar.gz",         url: $dxvk_url,   sha256: $sha_dxvk },
               vkd3d:  { version: $vkd3d_ver,  asset: "vkd3d-proton.tar.gz", url: $vkd3d_url,  sha256: $sha_vkd3d },
               turnip: { version: $turnip_ver, asset: "turnip.tar.gz",        url: $turnip_url, sha256: $sha_turnip },
-              fex:    { version: $fex_ver,    asset: "InstallFEX.py",        url: $fex_url,    sha256: $sha_fex    }
+              fex:    { version: $fex_ver,    asset: "InstallFEX.py",        url: $fex_url,    sha256: $sha_fex    },
+              fex_binaries: { version: $fex_ver, asset: "fex-binaries.tar.gz", url: $fex_bin_url, sha256: $sha_fex_binaries }
             }' > manifest.json
 
       # ── 7. Publish GitHub Release ────────────────────────────────────────
@@ -226,6 +249,7 @@ jobs:
             assets/vkd3d-proton.tar.gz \
             assets/turnip.tar.gz \
             assets/InstallFEX.py \
+            assets/fex-binaries.tar.gz \
             manifest.json
 
       # ── 8. Commit updated manifest.json back to repo ─────────────────────
