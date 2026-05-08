@@ -21,14 +21,15 @@ jobs:
 
       # ── 0. Install required tools ────────────────────────────────────────
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y zstd xz-utils qemu-user-static mmdebstrap debian-archive-keyring
+        # Changed from debian-archive-keyring to ubuntu-keyring
+        run: sudo apt-get update && sudo apt-get install -y zstd xz-utils qemu-user-static mmdebstrap ubuntu-keyring
 
       # ── 1. Fetch latest release tags ────────────────────────────────────
       - name: Fetch latest release versions
         id: versions
         run: |
-          # RootFS: Debian 12 Bookworm Slim
-          rootfs="bookworm-slim"
+          # RootFS: Ubuntu 24.04 Noble
+          rootfs="ubuntu-noble"
           
           # PRoot: track Termux package version
           proot=$(curl -fsSL \
@@ -85,8 +86,8 @@ jobs:
         if: steps.changed.outputs.changed == 'true'
         run: |
           echo "Creating RootFS using mmdebstrap..."
-          # Do not mkdir assets/rootfs_extract; let mmdebstrap create the target directory
-          sudo mmdebstrap --variant=minbase --architectures=arm64 --include=python3 --keyring=/usr/share/keyrings/debian-archive-keyring.gpg bookworm assets/rootfs_extract http://deb.debian.org/debian
+          # Note: Using ports.ubuntu.com because we are fetching arm64 packages
+          sudo mmdebstrap --variant=minbase --architectures=arm64 --include=python3 --keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg noble assets/rootfs_extract http://ports.ubuntu.com/ubuntu-ports/
           
           # Copy qemu-static into the rootfs for later use on device
           sudo cp /usr/bin/qemu-aarch64-static assets/rootfs_extract/usr/bin/
