@@ -1,16 +1,16 @@
 {
-  "updated_at": "2026-05-08T12:03:15Z",
+  "updated_at": "2026-05-08T12:47:44Z",
   "rootfs": {
     "version": "ubuntu-noble",
     "asset": "rootfs.tar.gz",
     "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260508/rootfs.tar.gz",
-    "sha256": "e6c72f68f819b5b4fce8d8cde0e4febd00c9b2b6055e36dab361dbd5175cfc19"
+    "sha256": "e8450d7145a3fccd378f63a1c509cce7f4256f13ea6c2d7763b68c9970f86d35"
   },
   "proot": {
     "version": "android-static",
     "asset": "proot.tar.gz",
     "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260508/proot.tar.gz",
-    "sha256": "0e7f377460d0c76af038437cabe21b82fb88b1f75eea13b48f0f7088382f5c8e"
+    "sha256": "83624a608fa93230c4365711d41089c3136c0adfb72934c2b2f19c888a4a5ab5"
   },
   "dxvk": {
     "version": "v2.7.1",
@@ -28,12 +28,18 @@
     "version": "tu_v26",
     "asset": "turnip.tar.gz",
     "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260508/turnip.tar.gz",
-    "sha256": "c42118f8ebcfa4f16f438eee031da55495406cbdea25ba2f934e1231d50dde85"
+    "sha256": "f73711796d8335176067e9f9a5f934ed8c01c02d67d168666aa505fe35e7905b"
   },
   "fex": {
-    "version": "FEX-2600",
+    "version": "FEX-2604",
     "asset": "InstallFEX.py",
     "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260508/InstallFEX.py",
     "sha256": "36320715ca484b6a02da21e144b8b007f54afb22a7c5650cbeb92c5f4f8f65cf"
+  },
+  "fex_binaries": {
+    "version": "FEX-2604",
+    "asset": "fex-binaries.tar.gz",
+    "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260508/fex-binaries.tar.gz",
+    "sha256": "193497314981dc50d7018fbbcea79acf30496cb958b9c3afb4004cdac9623d53"
   }
 }
