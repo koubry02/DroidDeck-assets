@@ -1,16 +1,16 @@
 {
-  "updated_at": "2026-05-08T10:16:58Z",
+  "updated_at": "2026-05-08T12:03:15Z",
   "rootfs": {
     "version": "ubuntu-noble",
     "asset": "rootfs.tar.gz",
     "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260508/rootfs.tar.gz",
-    "sha256": "ce9cc4bd56468ba319c59257febcd39b63be7fa152b6252bc5390698812ff0c5"
+    "sha256": "e6c72f68f819b5b4fce8d8cde0e4febd00c9b2b6055e36dab361dbd5175cfc19"
   },
   "proot": {
-    "version": "5.1.107-70",
+    "version": "android-static",
     "asset": "proot.tar.gz",
     "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260508/proot.tar.gz",
-    "sha256": "bfbf6ebc16b6890e04585de8c9e1a9ada8f0b819ce00acc106cef51e646c730d"
+    "sha256": "0e7f377460d0c76af038437cabe21b82fb88b1f75eea13b48f0f7088382f5c8e"
   },
   "dxvk": {
     "version": "v2.7.1",
@@ -28,7 +28,7 @@
     "version": "tu_v26",
     "asset": "turnip.tar.gz",
     "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260508/turnip.tar.gz",
-    "sha256": "5958aef82f8448f576dc582938d71f24297fc45f697a968773b8a047fc429c44"
+    "sha256": "c42118f8ebcfa4f16f438eee031da55495406cbdea25ba2f934e1231d50dde85"
   },
   "fex": {
     "version": "FEX-2604",
