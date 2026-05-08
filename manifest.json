@@ -31,7 +31,7 @@
     "sha256": "c42118f8ebcfa4f16f438eee031da55495406cbdea25ba2f934e1231d50dde85"
   },
   "fex": {
-    "version": "FEX-2604",
+    "version": "FEX-2600",
     "asset": "InstallFEX.py",
     "url": "https://github.com/koubry02/droiddeck-assets/releases/download/assets-20260508/InstallFEX.py",
     "sha256": "36320715ca484b6a02da21e144b8b007f54afb22a7c5650cbeb92c5f4f8f65cf"
