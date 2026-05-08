@@ -31,10 +31,8 @@ jobs:
           # RootFS: Ubuntu 24.04 Noble
           rootfs="ubuntu-noble"
           
-          # PRoot: track Termux package version
-          proot=$(curl -fsSL \
-            "https://packages-cf.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz" \
-            | zcat | awk '/^Package: proot$/{found=1} found && /^Version:/{print $2; exit}')
+          # PRoot: Android build with static libtalloc (green-green-avk)
+          proot="android-static"
           dxvk=$(gh api repos/doitsujin/dxvk/releases/latest --jq '.tag_name')
           vkd3d=$(gh api repos/HansKristian-Work/vkd3d-proton/releases/latest --jq '.tag_name')
           turnip=$(gh api repos/whitebelyash/freedreno_turnip-CI/releases/latest --jq '.tag_name')
@@ -97,22 +95,17 @@ jobs:
           sudo chown $(id -u):$(id -g) assets/rootfs.tar.gz
           sudo rm -rf assets/rootfs_extract
 
-      # PROOT
+      # PROOT - Android build with static libtalloc (from green-green-avk)
       - name: Download PRoot binary
         if: steps.changed.outputs.changed == 'true'
         run: |
-          PKG_URL=$(curl -fsSL "https://packages-cf.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz" \
-            | zcat | awk '/^Package: proot$/{found=1} found && /^Filename:/{print "https://packages-cf.termux.dev/apt/termux-main/"$2; exit}')
-          curl -fL "$PKG_URL" -o /tmp/proot.deb
-          mkdir -p /tmp/proot_extract
-          ar x /tmp/proot.deb --output /tmp/proot_extract
-          DATA=$(ls /tmp/proot_extract/data.tar.*)
-          tar -xf "$DATA" -C /tmp/proot_extract
-          PROOT_BIN=$(find /tmp/proot_extract -name proot -type f | head -1)
-          cp "$PROOT_BIN" assets/proot-aarch64-static
+          curl -fL "https://raw.githubusercontent.com/green-green-avk/build-proot-android/master/packages/proot-android-aarch64.tar.gz" -o assets/proot-android.tar.gz
+          tar -xzf assets/proot-android.tar.gz -C /tmp/proot_extract
+          cp /tmp/proot_extract/root/bin/proot assets/proot-aarch64-static
           chmod +x assets/proot-aarch64-static
           tar -czf assets/proot.tar.gz -C assets proot-aarch64-static
-          rm assets/proot-aarch64-static
+          rm assets/proot-aarch64-static assets/proot-android.tar.gz
+          rm -rf /tmp/proot_extract
 
       # DXVK
       - name: Download DXVK archive
