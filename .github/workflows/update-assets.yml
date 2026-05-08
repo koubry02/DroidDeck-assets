@@ -99,6 +99,7 @@ jobs:
       - name: Download PRoot binary
         if: steps.changed.outputs.changed == 'true'
         run: |
+          mkdir -p /tmp/proot_extract
           curl -fL "https://raw.githubusercontent.com/green-green-avk/build-proot-android/master/packages/proot-android-aarch64.tar.gz" -o assets/proot-android.tar.gz
           tar -xzf assets/proot-android.tar.gz -C /tmp/proot_extract
           cp /tmp/proot_extract/root/bin/proot assets/proot-aarch64-static
