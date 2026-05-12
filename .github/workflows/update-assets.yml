@@ -148,7 +148,7 @@ jobs:
           echo "Extracting squashfs..."
           sudo unsquashfs -d /tmp/fex-rootfs /tmp/Ubuntu_24_04.sqsh
 
-          # Fix: Ensure the mount point directories exist before mounting
+          # Ensure the mount point directories exist before mounting
           sudo mkdir -p /tmp/fex-rootfs/proc /tmp/fex-rootfs/sys /tmp/fex-rootfs/dev/pts
 
           sudo mount --bind /proc    /tmp/fex-rootfs/proc
@@ -159,7 +159,7 @@ jobs:
           # Safety net: ensure cleanup happens even if apt fails
           trap 'sudo umount /tmp/fex-rootfs/dev/pts /tmp/fex-rootfs/dev /tmp/fex-rootfs/sys /tmp/fex-rootfs/proc || true' EXIT
 
-          # Fix: Ensure /tmp exists with correct permissions inside the chroot
+          # Ensure /tmp exists with correct permissions inside the chroot
           sudo mkdir -p /tmp/fex-rootfs/tmp
           sudo chmod 1777 /tmp/fex-rootfs/tmp
 
@@ -168,10 +168,10 @@ jobs:
           sudo mkdir -p /tmp/fex-rootfs/etc/dpkg/dpkg.cfg.d
           echo "force-unsafe-io" | sudo tee /tmp/fex-rootfs/etc/dpkg/dpkg.cfg.d/01_ci
 
-          # Fix: Remove the default Ubuntu 24.04 sources file to prevent duplicates
+          # Remove the default Ubuntu 24.04 sources file to prevent duplicates
           sudo rm -f /tmp/fex-rootfs/etc/apt/sources.list.d/ubuntu.sources
 
-          # Fix: Remove Kisak PPA and pin official Ubuntu packages to force a downgrade
+          # Remove Kisak PPA and pin official Ubuntu packages to force a downgrade
           sudo rm -f /tmp/fex-rootfs/etc/apt/sources.list.d/kisak*.list
           sudo tee /tmp/fex-rootfs/etc/apt/preferences.d/99-downgrade-kisak <<'EOF'
           Package: *
@@ -185,8 +185,13 @@ jobs:
           deb http://archive.ubuntu.com/ubuntu noble-security main restricted universe multiverse
           SOURCES
 
-          # Fix: Remove dangling messagebus statoverride from the minimal rootfs
-          sudo sed -i '/messagebus/d' /tmp/fex-rootfs/var/lib/dpkg/statoverride || true
+          # ── FIX: Prevent dpkg from panicking over stripped system groups ──
+          # 1. Inject the missing messagebus group so dpkg doesn't crash on statoverride checks
+          sudo bash -c 'grep -q "^messagebus:" /tmp/fex-rootfs/etc/group || echo "messagebus:x:105:" >> /tmp/fex-rootfs/etc/group'
+          # 2. Inject the missing _apt user to suppress the sandbox warning
+          sudo bash -c 'grep -q "^_apt:" /tmp/fex-rootfs/etc/passwd || echo "_apt:x:106:65534::/nonexistent:/usr/sbin/nologin" >> /tmp/fex-rootfs/etc/passwd'
+          # 3. Completely empty the statoverride file to start with a clean slate
+          sudo bash -c '> /tmp/fex-rootfs/var/lib/dpkg/statoverride'
 
           sudo chroot /tmp/fex-rootfs dpkg --add-architecture i386
           sudo chroot /tmp/fex-rootfs apt-get update -q
