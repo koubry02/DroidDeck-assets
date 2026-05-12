@@ -17,7 +17,7 @@ jobs:
 
       # ── 0. Install required tools ────────────────────────────────────────
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y zstd xz-utils qemu-user-static mmdebstrap ubuntu-keyring squashfs-tools fakechroot fakeroot pigz
+        run: sudo apt-get update && sudo apt-get install -y zstd xz-utils qemu-user-static mmdebstrap ubuntu-keyring squashfs-tools pigz
 
       # ── 1. Fetch latest release tags ────────────────────────────────────
       - name: Fetch latest release versions
@@ -82,13 +82,22 @@ jobs:
       - name: Process RootFS
         if: steps.changed.outputs.changed == 'true'
         run: |
-          echo "Creating RootFS using mmdebstrap (fakechroot mode, Azure mirror, parallel gzip)..."
-          mmdebstrap --mode=fakechroot --variant=minbase --architectures=arm64 \
+          set -euo pipefail
+          echo "Creating RootFS using mmdebstrap (Azure mirror, parallel gzip)..."
+          sudo mmdebstrap --variant=minbase --architectures=arm64 \
             --include=python3,libstdc++6,libgcc-s1 \
             --keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg \
             noble - \
             http://azure.ports.ubuntu.com/ubuntu-ports/ \
             | pigz -p"$(nproc)" > assets/rootfs.tar.gz
+          sudo chown "$(id -u):$(id -g)" assets/rootfs.tar.gz
+          # Sanity check: fail loudly if the tarball is suspiciously small (mmdebstrap silently failing).
+          size=$(stat -c%s assets/rootfs.tar.gz)
+          echo "rootfs.tar.gz size: $size bytes"
+          if [ "$size" -lt 10000000 ]; then
+            echo "ERROR: rootfs.tar.gz is under 10 MB ($size bytes) — mmdebstrap likely failed." >&2
+            exit 1
+          fi
 
       # PROOT - Android build with static libtalloc
       - name: Download PRoot binary
