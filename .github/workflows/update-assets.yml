@@ -17,7 +17,7 @@ jobs:
 
       # ── 0. Install required tools ────────────────────────────────────────
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y zstd xz-utils qemu-user-static mmdebstrap ubuntu-keyring squashfs-tools
+        run: sudo apt-get update && sudo apt-get install -y zstd xz-utils qemu-user-static mmdebstrap ubuntu-keyring squashfs-tools fakechroot fakeroot pigz
 
       # ── 1. Fetch latest release tags ────────────────────────────────────
       - name: Fetch latest release versions
@@ -82,16 +82,13 @@ jobs:
       - name: Process RootFS
         if: steps.changed.outputs.changed == 'true'
         run: |
-          echo "Creating RootFS using mmdebstrap..."
-          sudo mmdebstrap --variant=minbase --architectures=arm64 \
+          echo "Creating RootFS using mmdebstrap (fakechroot mode, Azure mirror, parallel gzip)..."
+          mmdebstrap --mode=fakechroot --variant=minbase --architectures=arm64 \
             --include=python3,libstdc++6,libgcc-s1 \
             --keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg \
-            noble assets/rootfs_extract \
-            http://ports.ubuntu.com/ubuntu-ports/
-
-          sudo tar -czf assets/rootfs.tar.gz -C assets/rootfs_extract .
-          sudo chown $(id -u):$(id -g) assets/rootfs.tar.gz
-          sudo rm -rf assets/rootfs_extract
+            noble - \
+            http://azure.ports.ubuntu.com/ubuntu-ports/ \
+            | pigz -p"$(nproc)" > assets/rootfs.tar.gz
 
       # PROOT - Android build with static libtalloc
       - name: Download PRoot binary
@@ -140,8 +137,10 @@ jobs:
       - name: Build FEX x86_64 guest rootfs with Steam deps
         if: steps.changed.outputs.changed == 'true'
         run: |
-          SQSH_URL="https://rootfs.fex-emu.gg/Ubuntu_24_04/2025-12-27/Ubuntu_24_04.sqsh"
-          echo "Downloading FEX Ubuntu_24_04.sqsh..."
+          FEX_ROOTFS_TAG="${{ steps.versions.outputs.fex_rootfs }}"
+          FEX_ROOTFS_DATE="${FEX_ROOTFS_TAG#Ubuntu_24_04-}"
+          SQSH_URL="https://rootfs.fex-emu.gg/Ubuntu_24_04/${FEX_ROOTFS_DATE}/Ubuntu_24_04.sqsh"
+          echo "Downloading FEX Ubuntu_24_04.sqsh from $SQSH_URL..."
           curl -fsSL "$SQSH_URL" -o /tmp/Ubuntu_24_04.sqsh
 
           echo "Extracting squashfs..."
@@ -181,13 +180,17 @@ jobs:
           deb http://archive.ubuntu.com/ubuntu noble-security main restricted universe multiverse
           SOURCES
 
-          # ── Fix missing system groups/users to prevent dpkg panics ──
-          sudo bash -c 'grep -q "^messagebus:" /tmp/fex-rootfs/etc/group || echo "messagebus:x:105:" >> /tmp/fex-rootfs/etc/group'
-          sudo bash -c 'grep -q "^_apt:" /tmp/fex-rootfs/etc/passwd || echo "_apt:x:106:65534::/nonexistent:/usr/sbin/nologin" >> /tmp/fex-rootfs/etc/passwd'
-          sudo bash -c '> /tmp/fex-rootfs/var/lib/dpkg/statoverride'
+          # ── Fix missing system groups/users to prevent dpkg panics (let the system pick IDs) ──
+          sudo chroot /tmp/fex-rootfs sh -c 'getent group messagebus >/dev/null || groupadd --system messagebus'
+          sudo chroot /tmp/fex-rootfs sh -c 'getent passwd _apt >/dev/null || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin --gid nogroup _apt'
+          # Preserve existing statoverride (suid bits on sudo, ping, etc.); only create if missing.
+          sudo bash -c '[ -e /tmp/fex-rootfs/var/lib/dpkg/statoverride ] || touch /tmp/fex-rootfs/var/lib/dpkg/statoverride'
 
           # ── STRICTLY prevent apt from starting daemons during install which hold mount points busy ──
-          echo -e '#!/bin/sh\nexit 101' | sudo tee /tmp/fex-rootfs/usr/sbin/policy-rc.d
+          sudo tee /tmp/fex-rootfs/usr/sbin/policy-rc.d >/dev/null <<'EOF'
+          #!/bin/sh
+          exit 101
+          EOF
           sudo chmod +x /tmp/fex-rootfs/usr/sbin/policy-rc.d
 
           sudo chroot /tmp/fex-rootfs dpkg --add-architecture i386
