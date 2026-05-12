@@ -194,10 +194,10 @@ jobs:
           sudo chroot /tmp/fex-rootfs apt-get update -q
 
           # Force downgrade of existing Kisak Mesa packages
-          sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y --allow-downgrades -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+          sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y --allow-downgrades --allow-change-held-packages -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
           # ── Explicitly pass mesa-vulkan-drivers for BOTH architectures to force a synced downgrade ──
-          sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
+          sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades --allow-change-held-packages --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
             mesa-vulkan-drivers mesa-vulkan-drivers:i386 \
             libvulkan1 libvulkan1:i386 \
             steam-installer \
