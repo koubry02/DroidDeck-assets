@@ -163,9 +163,12 @@ jobs:
 
           sudo mkdir -p /tmp/fex-rootfs/etc/dpkg/dpkg.cfg.d
           echo "force-unsafe-io" | sudo tee /tmp/fex-rootfs/etc/dpkg/dpkg.cfg.d/01_ci
-          sudo rm -f /tmp/fex-rootfs/etc/apt/sources.list.d/ubuntu.sources
-          sudo rm -f /tmp/fex-rootfs/etc/apt/sources.list.d/kisak*.list
+          
+          # ── Completely obliterate all third-party PPAs (including .sources files) ──
+          sudo rm -rf /tmp/fex-rootfs/etc/apt/sources.list.d/*
+          sudo rm -f /tmp/fex-rootfs/etc/apt/sources.list
 
+          sudo mkdir -p /tmp/fex-rootfs/etc/apt/preferences.d
           sudo tee /tmp/fex-rootfs/etc/apt/preferences.d/99-downgrade-kisak <<'EOF'
           Package: *
           Pin: release o=Ubuntu
@@ -178,24 +181,27 @@ jobs:
           deb http://archive.ubuntu.com/ubuntu noble-security main restricted universe multiverse
           SOURCES
 
+          # ── Fix missing system groups/users to prevent dpkg panics ──
           sudo bash -c 'grep -q "^messagebus:" /tmp/fex-rootfs/etc/group || echo "messagebus:x:105:" >> /tmp/fex-rootfs/etc/group'
           sudo bash -c 'grep -q "^_apt:" /tmp/fex-rootfs/etc/passwd || echo "_apt:x:106:65534::/nonexistent:/usr/sbin/nologin" >> /tmp/fex-rootfs/etc/passwd'
           sudo bash -c '> /tmp/fex-rootfs/var/lib/dpkg/statoverride'
 
-          # STRICTLY prevent apt from starting daemons during install which hold mount points busy
+          # ── STRICTLY prevent apt from starting daemons during install which hold mount points busy ──
           echo -e '#!/bin/sh\nexit 101' | sudo tee /tmp/fex-rootfs/usr/sbin/policy-rc.d
           sudo chmod +x /tmp/fex-rootfs/usr/sbin/policy-rc.d
 
           sudo chroot /tmp/fex-rootfs dpkg --add-architecture i386
           sudo chroot /tmp/fex-rootfs apt-get update -q
 
-          # Force config options to suppress interactive config file prompts
+          # Force downgrade of existing Kisak Mesa packages
           sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y --allow-downgrades -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
-          sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
+          # ── Explicitly pass mesa-vulkan-drivers for BOTH architectures to force a synced downgrade ──
+          sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
+            mesa-vulkan-drivers mesa-vulkan-drivers:i386 \
+            libvulkan1 libvulkan1:i386 \
             steam-installer \
             libwayland-client0 libwayland-egl1 libwayland-cursor0 \
-            libvulkan1 mesa-vulkan-drivers \
             libxkbcommon0 xkb-data \
             ca-certificates curl
 
