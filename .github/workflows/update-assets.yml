@@ -89,12 +89,11 @@ jobs:
             noble assets/rootfs_extract \
             http://ports.ubuntu.com/ubuntu-ports/
 
-          # Archive the result
           sudo tar -czf assets/rootfs.tar.gz -C assets/rootfs_extract .
           sudo chown $(id -u):$(id -g) assets/rootfs.tar.gz
           sudo rm -rf assets/rootfs_extract
 
-      # PROOT - Android build with static libtalloc (from green-green-avk)
+      # PROOT - Android build with static libtalloc
       - name: Download PRoot binary
         if: steps.changed.outputs.changed == 'true'
         run: |
@@ -148,18 +147,15 @@ jobs:
           echo "Extracting squashfs..."
           sudo unsquashfs -d /tmp/fex-rootfs /tmp/Ubuntu_24_04.sqsh
 
-          # Ensure the mount point directories exist before mounting
           sudo mkdir -p /tmp/fex-rootfs/proc /tmp/fex-rootfs/sys /tmp/fex-rootfs/dev/pts
-
           sudo mount --bind /proc    /tmp/fex-rootfs/proc
           sudo mount --bind /sys     /tmp/fex-rootfs/sys
           sudo mount --bind /dev     /tmp/fex-rootfs/dev
           sudo mount --bind /dev/pts /tmp/fex-rootfs/dev/pts
 
-          # Safety net: ensure cleanup happens even if apt fails
-          trap 'sudo umount /tmp/fex-rootfs/dev/pts /tmp/fex-rootfs/dev /tmp/fex-rootfs/sys /tmp/fex-rootfs/proc || true' EXIT
+          # Safety net: Fallback to lazy unmount (-l) if standard umount fails
+          trap 'sudo umount -l /tmp/fex-rootfs/dev/pts /tmp/fex-rootfs/dev /tmp/fex-rootfs/sys /tmp/fex-rootfs/proc || true' EXIT
 
-          # Ensure /tmp exists with correct permissions inside the chroot
           sudo mkdir -p /tmp/fex-rootfs/tmp
           sudo chmod 1777 /tmp/fex-rootfs/tmp
 
@@ -167,12 +163,9 @@ jobs:
 
           sudo mkdir -p /tmp/fex-rootfs/etc/dpkg/dpkg.cfg.d
           echo "force-unsafe-io" | sudo tee /tmp/fex-rootfs/etc/dpkg/dpkg.cfg.d/01_ci
-
-          # Remove the default Ubuntu 24.04 sources file to prevent duplicates
           sudo rm -f /tmp/fex-rootfs/etc/apt/sources.list.d/ubuntu.sources
-
-          # Remove Kisak PPA and pin official Ubuntu packages to force a downgrade
           sudo rm -f /tmp/fex-rootfs/etc/apt/sources.list.d/kisak*.list
+
           sudo tee /tmp/fex-rootfs/etc/apt/preferences.d/99-downgrade-kisak <<'EOF'
           Package: *
           Pin: release o=Ubuntu
@@ -185,22 +178,21 @@ jobs:
           deb http://archive.ubuntu.com/ubuntu noble-security main restricted universe multiverse
           SOURCES
 
-          # ── FIX: Prevent dpkg from panicking over stripped system groups ──
-          # 1. Inject the missing messagebus group so dpkg doesn't crash on statoverride checks
           sudo bash -c 'grep -q "^messagebus:" /tmp/fex-rootfs/etc/group || echo "messagebus:x:105:" >> /tmp/fex-rootfs/etc/group'
-          # 2. Inject the missing _apt user to suppress the sandbox warning
           sudo bash -c 'grep -q "^_apt:" /tmp/fex-rootfs/etc/passwd || echo "_apt:x:106:65534::/nonexistent:/usr/sbin/nologin" >> /tmp/fex-rootfs/etc/passwd'
-          # 3. Completely empty the statoverride file to start with a clean slate
           sudo bash -c '> /tmp/fex-rootfs/var/lib/dpkg/statoverride'
+
+          # STRICTLY prevent apt from starting daemons during install which hold mount points busy
+          echo -e '#!/bin/sh\nexit 101' | sudo tee /tmp/fex-rootfs/usr/sbin/policy-rc.d
+          sudo chmod +x /tmp/fex-rootfs/usr/sbin/policy-rc.d
 
           sudo chroot /tmp/fex-rootfs dpkg --add-architecture i386
           sudo chroot /tmp/fex-rootfs apt-get update -q
 
-          # Force downgrade of existing Kisak Mesa packages
-          sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y --allow-downgrades
+          # Force config options to suppress interactive config file prompts
+          sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y --allow-downgrades -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
-          # Install Steam and Wayland/Vulkan dependencies
-          sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
             steam-installer \
             libwayland-client0 libwayland-egl1 libwayland-cursor0 \
             libvulkan1 mesa-vulkan-drivers \
@@ -209,18 +201,25 @@ jobs:
 
           sudo chroot /tmp/fex-rootfs apt-get clean
           sudo rm -rf /tmp/fex-rootfs/var/lib/apt/lists/*
+          sudo rm -f /tmp/fex-rootfs/usr/sbin/policy-rc.d
 
           sudo touch /tmp/fex-rootfs/.steam_deps_ready
 
-          # Manual unmount (trap will catch anything missed if script exits early)
-          sudo umount /tmp/fex-rootfs/dev/pts
-          sudo umount /tmp/fex-rootfs/dev
-          sudo umount /tmp/fex-rootfs/sys
-          sudo umount /tmp/fex-rootfs/proc
-          # Clear trap since we unmounted cleanly
+          # Manual unmount with fallback to lazy unmount (-l) if target remains busy
+          sudo umount /tmp/fex-rootfs/dev/pts || sudo umount -l /tmp/fex-rootfs/dev/pts
+          sudo umount /tmp/fex-rootfs/dev || sudo umount -l /tmp/fex-rootfs/dev
+          sudo umount /tmp/fex-rootfs/sys || sudo umount -l /tmp/fex-rootfs/sys
+          sudo umount /tmp/fex-rootfs/proc || sudo umount -l /tmp/fex-rootfs/proc
           trap - EXIT
 
-          sudo tar -czf assets/fex-rootfs-steam.tar.gz -C /tmp/fex-rootfs .
+          # Tar extraction with excludes as a final safety net against stray mount contents
+          sudo tar -czf assets/fex-rootfs-steam.tar.gz -C /tmp/fex-rootfs \
+            --exclude='./proc/*' \
+            --exclude='./sys/*' \
+            --exclude='./dev/*' \
+            --exclude='./run/*' \
+            .
+            
           sudo chown $(id -u):$(id -g) assets/fex-rootfs-steam.tar.gz
           sudo rm -rf /tmp/fex-rootfs /tmp/Ubuntu_24_04.sqsh
           echo "Size: $(du -sh assets/fex-rootfs-steam.tar.gz)"
@@ -238,9 +237,12 @@ jobs:
           mkdir -p assets/fex_binaries
           BASE_URL="https://ppa.launchpadcontent.net/fex-emu/fex/ubuntu/pool/main/f/fex-emu-armv8.0/"
 
-          # Scrape the directory listing for the latest arm64.deb for each required package
           for pkg in fex-emu-armv8.0 fex-emu-binfmt32 fex-emu-binfmt64; do
             DEB_FILE=$(curl -s "$BASE_URL" | grep -o "href=\"${pkg}_[^\"]*arm64\.deb\"" | cut -d'"' -f2 | tail -n 1)
+            if [ -z "$DEB_FILE" ]; then
+              echo "Error: Could not find deb file for $pkg at $BASE_URL"
+              exit 1
+            fi
             echo "Downloading $DEB_FILE..."
             curl -fL "${BASE_URL}${DEB_FILE}" -o assets/fex_binaries/${pkg}.deb
           done
@@ -251,7 +253,6 @@ jobs:
           done
 
           tar -czf assets/fex-binaries.tar.gz -C assets/fex_extracted ./usr
-
           rm -rf assets/fex_binaries assets/fex_extracted
 
       # ── 4. Compute SHA256 checksums ──────────────────────────────────────
@@ -357,5 +358,5 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add manifest.json
-          git commit -m "chore: update manifest for ${{ steps.tag.outputs.tag }}"
+          git commit -m "chore: update manifest for ${{ steps.tag.outputs.tag }}" || true
           git push origin HEAD
