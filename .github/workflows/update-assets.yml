@@ -147,7 +147,9 @@ jobs:
 
           echo "Extracting squashfs..."
           sudo unsquashfs -d /tmp/fex-rootfs /tmp/Ubuntu_24_04.sqsh
+          sudo mkdir -p /tmp/fex-rootfs/proc /tmp/fex-rootfs/sys /tmp/fex-rootfs/dev/pts
 
+          
           sudo mount --bind /proc    /tmp/fex-rootfs/proc
           sudo mount --bind /sys     /tmp/fex-rootfs/sys
           sudo mount --bind /dev     /tmp/fex-rootfs/dev
