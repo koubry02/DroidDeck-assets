@@ -171,8 +171,7 @@ jobs:
           # Fix: Remove the default Ubuntu 24.04 sources file to prevent duplicates
           sudo rm -f /tmp/fex-rootfs/etc/apt/sources.list.d/ubuntu.sources
 
-          # Fix: The Kisak PPA in the FEX rootfs is out of sync for multi-arch (64-bit vs 32-bit). 
-          # We remove the PPA and pin official Ubuntu packages to force a downgrade to stable, matching versions.
+          # Fix: Remove Kisak PPA and pin official Ubuntu packages to force a downgrade
           sudo rm -f /tmp/fex-rootfs/etc/apt/sources.list.d/kisak*.list
           sudo tee /tmp/fex-rootfs/etc/apt/preferences.d/99-downgrade-kisak <<'EOF'
           Package: *
@@ -186,13 +185,16 @@ jobs:
           deb http://archive.ubuntu.com/ubuntu noble-security main restricted universe multiverse
           SOURCES
 
+          # Fix: Remove dangling messagebus statoverride from the minimal rootfs
+          sudo sed -i '/messagebus/d' /tmp/fex-rootfs/var/lib/dpkg/statoverride || true
+
           sudo chroot /tmp/fex-rootfs dpkg --add-architecture i386
           sudo chroot /tmp/fex-rootfs apt-get update -q
 
-          # Fix: Force downgrade of existing Kisak Mesa packages to stable Ubuntu versions to resolve the multi-arch mismatch
+          # Force downgrade of existing Kisak Mesa packages
           sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y --allow-downgrades
 
-          # Added noninteractive frontend to prevent steam-installer from hanging
+          # Install Steam and Wayland/Vulkan dependencies
           sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             steam-installer \
             libwayland-client0 libwayland-egl1 libwayland-cursor0 \
