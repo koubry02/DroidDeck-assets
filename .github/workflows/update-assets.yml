@@ -23,8 +23,8 @@ jobs:
       - name: Fetch latest release versions
         id: versions
         run: |
-          # RootFS: Ubuntu 24.04 Noble
-          rootfs="ubuntu-noble"
+          # RootFS: Ubuntu 26.04 Resolute
+          rootfs="resolute"
 
           # PRoot: Android build with static libtalloc (green-green-avk)
           proot="android-static"
@@ -87,7 +87,7 @@ jobs:
           sudo mmdebstrap --variant=minbase --architectures=arm64 \
             --include=python3,libstdc++6,libgcc-s1 \
             --keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg \
-            noble - \
+            resolute - \
             http://azure.ports.ubuntu.com/ubuntu-ports/ \
             | pigz -p"$(nproc)" > assets/rootfs.tar.gz
           sudo chown "$(id -u):$(id -g)" assets/rootfs.tar.gz
