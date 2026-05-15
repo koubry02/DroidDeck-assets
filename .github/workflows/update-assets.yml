@@ -117,9 +117,18 @@ jobs:
 
       # ── 3. Build and Download assets ─────────────────────────────────────
 
-      # ROOTFS — Build from scratch with mmdebstrap
+      # ROOTFS — Build from scratch with mmdebstrap (or restore from cache)
+      - name: Cache RootFS tarball
+        id: cache-rootfs
+        uses: actions/cache@v4
+        with:
+          path: assets/rootfs.tar.gz
+          key: rootfs-${{ steps.versions.outputs.rootfs }}
+          restore-keys: |
+            rootfs-
+
       - name: Process RootFS
-        if: steps.changed.outputs.changed == 'true'
+        if: steps.changed.outputs.changed == 'true' && steps.cache-rootfs.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           echo "Creating RootFS using mmdebstrap (Azure mirror, parallel gzip)..."
@@ -181,9 +190,18 @@ jobs:
           tar -czf assets/turnip.tar.gz -C assets/turnip_extracted .
           rm -rf "$TURNIP_FILE" assets/turnip_extracted
 
-      # FEX x86_64 guest rootfs with Steam + Wayland + Vulkan deps
+      # FEX x86_64 guest rootfs with Steam + Wayland + Vulkan deps (or restore from cache)
+      - name: Cache FEX guest rootfs
+        id: cache-fex-rootfs
+        uses: actions/cache@v4
+        with:
+          path: assets/fex-rootfs-steam.tar.gz
+          key: fex-rootfs-steam-${{ steps.versions.outputs.fex_rootfs }}
+          restore-keys: |
+            fex-rootfs-steam-
+
       - name: Build FEX x86_64 guest rootfs with Steam deps
-        if: steps.changed.outputs.changed == 'true'
+        if: steps.changed.outputs.changed == 'true' && steps.cache-fex-rootfs.outputs.cache-hit != 'true'
         run: |
           FEX_ROOTFS_TAG="${{ steps.versions.outputs.fex_rootfs }}"
           FEX_ROOTFS_DATE="${FEX_ROOTFS_TAG#Ubuntu_24_04-}"
