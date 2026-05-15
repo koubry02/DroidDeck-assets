@@ -9,13 +9,26 @@ permissions:
   contents: write         # needed to create releases, push tags, and commit manifest
 
 env:
-  # Pin FEX to a specific tag — we build from source to control the glibc target.
-  # Bump this when a new FEX release is wanted (rpmalloc since FEX-2603,
-  # no jemalloc glibc hooks; the segfault fix).
-  # See https://fex-emu.com/FEX-2605/ for changes.
-  FEX_VERSION: FEX-2605
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 0 — Resolve versions (runs first, both build jobs depend on this)
+  #   Fetches the latest FEX release tag from GitHub API so we always build
+  #   the latest upstream release instead of a hardcoded pin.
+  # ═══════════════════════════════════════════════════════════════════════════
+  resolve-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      fex_version: ${{ steps.fex.outputs.version }}
+    steps:
+      - name: Fetch latest FEX version
+        id: fex
+        run: |
+          version=$(gh api repos/FEX-Emu/FEX/releases/latest --jq '.tag_name')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "FEX version: $version"
+
   # ═══════════════════════════════════════════════════════════════════════════
   # Job 1 — x86_64-hosted assets
   #   Builds: RootFS, PRoot, DXVK, VKD3D-Proton, Turnip, FEX x86_64 guest
@@ -23,6 +36,7 @@ jobs:
   #   Uploads: artifacts/ directory for the release job
   # ═══════════════════════════════════════════════════════════════════════════
   build-assets:
+    needs: [resolve-versions]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -56,7 +70,7 @@ jobs:
           dxvk=$(gh api repos/doitsujin/dxvk/releases/latest --jq '.tag_name')
           vkd3d=$(gh api repos/HansKristian-Work/vkd3d-proton/releases/latest --jq '.tag_name')
           turnip=$(gh api repos/whitebelyash/freedreno_turnip-CI/releases/latest --jq '.tag_name')
-          fex="${{ env.FEX_VERSION }}"
+          fex="${{ needs.resolve-versions.outputs.fex_version }}"
           fex_rootfs="Ubuntu_24_04-2025-12-27"
 
           echo "rootfs=$rootfs"       >> "$GITHUB_OUTPUT"
@@ -293,6 +307,7 @@ jobs:
   #   binary is safe from the segfault that plagues the PPA-built FEX.
   # ═══════════════════════════════════════════════════════════════════════════
   build-fex:
+    needs: [resolve-versions]
     runs-on: ubuntu-24.04-arm
 
     steps:
@@ -301,11 +316,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build lld ccache
 
-      - name: Checkout FEX source (${{ env.FEX_VERSION }})
+      - name: Checkout FEX source (${{ needs.resolve-versions.outputs.fex_version }})
         uses: actions/checkout@v4
         with:
           repository: FEX-Emu/FEX
-          ref: ${{ env.FEX_VERSION }}
+          ref: ${{ needs.resolve-versions.outputs.fex_version }}
           path: FEX-Source
           fetch-depth: 1
 
