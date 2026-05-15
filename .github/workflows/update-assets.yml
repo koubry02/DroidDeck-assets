@@ -1,15 +1,39 @@
 name: Update DroidDeck Assets
+
 on:
   schedule:
     - cron: '0 3 1 * *'   # runs on the 1st of every month at 03:00 UTC
   workflow_dispatch:      # allows manual trigger from GitHub UI
+
 permissions:
   contents: write         # needed to create releases, push tags, and commit manifest
+
+env:
+  # Pin FEX to a specific tag — we build from source to control the glibc target.
+  # Bump this when a new FEX release is wanted (currently FEX-2604 uses rpmalloc,
+  # no jemalloc glibc hooks; the segfault fix).
+  FEX_VERSION: FEX-2604
+
 jobs:
-  update-assets:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 1 — x86_64-hosted assets
+  #   Builds: RootFS, PRoot, DXVK, VKD3D-Proton, Turnip, FEX x86_64 guest
+  #           rootfs with Steam + Wayland + Vulkan deps, InstallFEX.py
+  #   Uploads: artifacts/ directory for the release job
+  # ═══════════════════════════════════════════════════════════════════════════
+  build-assets:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      changed:    ${{ steps.changed.outputs.changed }}
+      rootfs:     ${{ steps.versions.outputs.rootfs }}
+      proot:      ${{ steps.versions.outputs.proot }}
+      dxvk:       ${{ steps.versions.outputs.dxvk }}
+      vkd3d:      ${{ steps.versions.outputs.vkd3d }}
+      turnip:     ${{ steps.versions.outputs.turnip }}
+      fex:        ${{ steps.versions.outputs.fex }}
+      fex_rootfs: ${{ steps.versions.outputs.fex_rootfs }}
 
     steps:
       - name: Checkout repository
@@ -31,7 +55,7 @@ jobs:
           dxvk=$(gh api repos/doitsujin/dxvk/releases/latest --jq '.tag_name')
           vkd3d=$(gh api repos/HansKristian-Work/vkd3d-proton/releases/latest --jq '.tag_name')
           turnip=$(gh api repos/whitebelyash/freedreno_turnip-CI/releases/latest --jq '.tag_name')
-          fex=$(gh api repos/FEX-Emu/FEX/releases/latest --jq '.tag_name')
+          fex="${{ env.FEX_VERSION }}"
           fex_rootfs="Ubuntu_24_04-2025-12-27"
 
           echo "rootfs=$rootfs"       >> "$GITHUB_OUTPUT"
@@ -171,7 +195,7 @@ jobs:
 
           sudo mkdir -p /tmp/fex-rootfs/etc/dpkg/dpkg.cfg.d
           echo "force-unsafe-io" | sudo tee /tmp/fex-rootfs/etc/dpkg/dpkg.cfg.d/01_ci
-          
+
           # ── Completely obliterate all third-party PPAs (including .sources files) ──
           sudo rm -rf /tmp/fex-rootfs/etc/apt/sources.list.d/*
           sudo rm -f /tmp/fex-rootfs/etc/apt/sources.list
@@ -237,45 +261,134 @@ jobs:
             --exclude='./dev/*' \
             --exclude='./run/*' \
             .
-            
+
           sudo chown $(id -u):$(id -g) assets/fex-rootfs-steam.tar.gz
           sudo rm -rf /tmp/fex-rootfs /tmp/Ubuntu_24_04.sqsh
           echo "Size: $(du -sh assets/fex-rootfs-steam.tar.gz)"
 
-      # FEX install script
+      # FEX install script (for posterity — never executed at runtime)
       - name: Download FEX install script
         if: steps.changed.outputs.changed == 'true'
         run: |
           curl -fsSL "https://raw.githubusercontent.com/FEX-Emu/FEX/main/Scripts/InstallFEX.py" -o assets/InstallFEX.py
 
-      # FEX binaries dynamically scraped from Ubuntu PPA (ARM64)
-      - name: Download FEX binaries
+      # ── Upload all built assets for the release gatherer job ──
+      - name: Upload built assets
         if: steps.changed.outputs.changed == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: assets
+          path: assets/
+          retention-days: 1
+          compression-level: 0  # assets are already compressed
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 2 — Build FEX from source on ARM64
+  #   Why ARM64 native: FEX itself only supports AArch64 hosts (x86_64 host
+  #   builds are CI-only debug config via -DENABLE_X86_HOST_DEBUG=True).
+  #   Running on ubuntu-24.04-arm gives us glibc 2.39 — combined with
+  #   -DENABLE_JEMALLOC_GLIBC_ALLOC=FALSE (no dead glibc hooks) and
+  #   -DENABLE_FEX_ALLOCATOR=TRUE (rpmalloc, no hooks needed), the resulting
+  #   binary is safe from the segfault that plagues the PPA-built FEX.
+  # ═══════════════════════════════════════════════════════════════════════════
+  build-fex:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Install FEX build dependencies
         run: |
-          mkdir -p assets/fex_binaries
-          BASE_URL="https://ppa.launchpadcontent.net/fex-emu/fex/ubuntu/pool/main/f/fex-emu-armv8.0/"
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build lld ccache
 
-          for pkg in fex-emu-armv8.0 fex-emu-binfmt32 fex-emu-binfmt64; do
-            DEB_FILE=$(curl -s "$BASE_URL" | grep -o "href=\"${pkg}_[^\"]*arm64\.deb\"" | cut -d'"' -f2 | tail -n 1)
-            if [ -z "$DEB_FILE" ]; then
-              echo "Error: Could not find deb file for $pkg at $BASE_URL"
-              exit 1
-            fi
-            echo "Downloading $DEB_FILE..."
-            curl -fL "${BASE_URL}${DEB_FILE}" -o assets/fex_binaries/${pkg}.deb
-          done
+      - name: Checkout FEX source (${{ env.FEX_VERSION }})
+        uses: actions/checkout@v4
+        with:
+          repository: FEX-Emu/FEX
+          ref: ${{ env.FEX_VERSION }}
+          path: FEX-Source
+          fetch-depth: 1
 
-          mkdir -p assets/fex_extracted
-          for deb in assets/fex_binaries/*.deb; do
-            dpkg -x "$deb" assets/fex_extracted/
-          done
+      - name: Initialize submodules
+        run: |
+          cd FEX-Source
+          # Minimal submodules needed for a production build without thunks:
+          # rpmalloc, fmt, xxhash, range-v3, unordered_dense, vixl, cephes, SoftFloat
+          # Tests and thunk deps (Catch2, jemalloc, zydis, etc.) are skipped
+          # because BUILD_TESTING=False and BUILD_THUNKS=False.
+          git submodule update --init --depth 1
 
-          tar -czf assets/fex-binaries.tar.gz -C assets/fex_extracted ./usr
-          rm -rf assets/fex_binaries assets/fex_extracted
+      - name: ccache cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: fex-ccache-${{ runner.arch }}-${{ hashFiles('FEX-Source/Source/**/*.cpp', 'FEX-Source/Source/**/*.h', 'FEX-Source/FEXCore/**/*.cpp', 'FEX-Source/FEXCore/**/*.h') }}
+          restore-keys: |
+            fex-ccache-${{ runner.arch }}-
+
+      - name: Configure CMake
+        run: |
+          cmake -S FEX-Source -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_LTO=True \
+            -DENABLE_ASSERTIONS=False \
+            -DBUILD_THUNKS=False \
+            -DBUILD_FEXCONFIG=False \
+            -DBUILD_TESTING=False \
+            -DBUILD_STEAM_SUPPORT=False \
+            -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
+            -DENABLE_FEX_ALLOCATOR=True \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DTUNE_CPU=generic \
+            -DUSE_LINKER=lld
+
+      - name: Build FEX
+        run: cmake --build build
+
+      - name: Package FEX binaries
+        run: |
+          DESTDIR="$PWD/fex-install" cmake --build build -t install
+          cd fex-install
+          tar czf ../fex-binaries.tar.gz ./usr
+          ls -lh ../fex-binaries.tar.gz
+
+      - name: Upload FEX binaries
+        uses: actions/upload-artifact@v6
+        with:
+          name: fex-binaries
+          path: fex-binaries.tar.gz
+          retention-days: 1
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 3 — Gather, checksum, manifest, release
+  #   Runs only when build-assets detected a version change AND both upstream
+  #   jobs succeeded.
+  # ═══════════════════════════════════════════════════════════════════════════
+  release:
+    needs: [build-assets, build-fex]
+    if: needs.build-assets.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Download artifacts from both upstream jobs ──
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded
+
+      - name: Merge artifacts into assets/
+        run: |
+          mkdir -p assets
+          cp -r downloaded/assets/* assets/
+          cp downloaded/fex-binaries/fex-binaries.tar.gz assets/
+          echo "Assets:"
+          ls -lh assets/
 
       # ── 4. Compute SHA256 checksums ──────────────────────────────────────
       - name: Compute SHA256 checksums
-        if: steps.changed.outputs.changed == 'true'
         id: checksums
         run: |
           echo "sha_rootfs=$(sha256sum          assets/rootfs.tar.gz         | awk '{print $1}')" >> "$GITHUB_OUTPUT"
@@ -289,43 +402,41 @@ jobs:
 
       # ── 5. Determine release tag ─────────────────────────────────────────
       - name: Compute release tag
-        if: steps.changed.outputs.changed == 'true'
         id: tag
         run: echo "tag=assets-$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
 
       # ── 6. Generate manifest.json ────────────────────────────────────────
       - name: Update manifest.json
-        if: steps.changed.outputs.changed == 'true'
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           BASE_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}"
 
           jq -n \
-            --arg ts                   "$TIMESTAMP"                                           \
-            --arg rootfs_ver           "${{ steps.versions.outputs.rootfs }}"                 \
-            --arg proot_ver            "${{ steps.versions.outputs.proot }}"                  \
-            --arg dxvk_ver             "${{ steps.versions.outputs.dxvk }}"                   \
-            --arg vkd3d_ver            "${{ steps.versions.outputs.vkd3d }}"                  \
-            --arg turnip_ver           "${{ steps.versions.outputs.turnip }}"                 \
-            --arg fex_ver              "${{ steps.versions.outputs.fex }}"                    \
-            --arg fex_rootfs_ver       "${{ steps.versions.outputs.fex_rootfs }}"             \
-            --arg rootfs_url           "${BASE_URL}/rootfs.tar.gz"                            \
-            --arg proot_url            "${BASE_URL}/proot.tar.gz"                             \
-            --arg dxvk_url             "${BASE_URL}/dxvk.tar.gz"                              \
-            --arg vkd3d_url            "${BASE_URL}/vkd3d-proton.tar.gz"                      \
-            --arg turnip_url           "${BASE_URL}/turnip.tar.gz"                            \
-            --arg fex_url              "${BASE_URL}/InstallFEX.py"                            \
-            --arg fex_bin_url          "${BASE_URL}/fex-binaries.tar.gz"                      \
-            --arg fex_rootfs_steam_url "${BASE_URL}/fex-rootfs-steam.tar.gz"                  \
-            --arg sha_rootfs           "${{ steps.checksums.outputs.sha_rootfs }}"            \
-            --arg sha_proot            "${{ steps.checksums.outputs.sha_proot }}"             \
-            --arg sha_dxvk             "${{ steps.checksums.outputs.sha_dxvk }}"              \
-            --arg sha_vkd3d            "${{ steps.checksums.outputs.sha_vkd3d }}"             \
-            --arg sha_turnip           "${{ steps.checksums.outputs.sha_turnip }}"            \
-            --arg sha_fex              "${{ steps.checksums.outputs.sha_fex }}"               \
-            --arg sha_fex_binaries     "${{ steps.checksums.outputs.sha_fex_binaries }}"      \
-            --arg sha_fex_rootfs_steam "${{ steps.checksums.outputs.sha_fex_rootfs_steam }}"  \
+            --arg ts                   "$TIMESTAMP"                                                               \
+            --arg rootfs_ver           "${{ needs.build-assets.outputs.rootfs }}"                                 \
+            --arg proot_ver            "${{ needs.build-assets.outputs.proot }}"                                  \
+            --arg dxvk_ver             "${{ needs.build-assets.outputs.dxvk }}"                                   \
+            --arg vkd3d_ver            "${{ needs.build-assets.outputs.vkd3d }}"                                  \
+            --arg turnip_ver           "${{ needs.build-assets.outputs.turnip }}"                                 \
+            --arg fex_ver              "${{ needs.build-assets.outputs.fex }}"                                    \
+            --arg fex_rootfs_ver       "${{ needs.build-assets.outputs.fex_rootfs }}"                             \
+            --arg rootfs_url           "${BASE_URL}/rootfs.tar.gz"                                                \
+            --arg proot_url            "${BASE_URL}/proot.tar.gz"                                                 \
+            --arg dxvk_url             "${BASE_URL}/dxvk.tar.gz"                                                  \
+            --arg vkd3d_url            "${BASE_URL}/vkd3d-proton.tar.gz"                                          \
+            --arg turnip_url           "${BASE_URL}/turnip.tar.gz"                                                \
+            --arg fex_url              "${BASE_URL}/InstallFEX.py"                                                \
+            --arg fex_bin_url          "${BASE_URL}/fex-binaries.tar.gz"                                          \
+            --arg fex_rootfs_steam_url "${BASE_URL}/fex-rootfs-steam.tar.gz"                                      \
+            --arg sha_rootfs           "${{ steps.checksums.outputs.sha_rootfs }}"                                \
+            --arg sha_proot            "${{ steps.checksums.outputs.sha_proot }}"                                 \
+            --arg sha_dxvk             "${{ steps.checksums.outputs.sha_dxvk }}"                                  \
+            --arg sha_vkd3d            "${{ steps.checksums.outputs.sha_vkd3d }}"                                 \
+            --arg sha_turnip           "${{ steps.checksums.outputs.sha_turnip }}"                                \
+            --arg sha_fex              "${{ steps.checksums.outputs.sha_fex }}"                                   \
+            --arg sha_fex_binaries     "${{ steps.checksums.outputs.sha_fex_binaries }}"                          \
+            --arg sha_fex_rootfs_steam "${{ steps.checksums.outputs.sha_fex_rootfs_steam }}"                      \
             '{
               updated_at:   $ts,
               rootfs:       { version: $rootfs_ver,     asset: "rootfs.tar.gz",          url: $rootfs_url,           sha256: $sha_rootfs           },
@@ -338,9 +449,11 @@ jobs:
               fex_rootfs_steam: { version: $fex_rootfs_ver, asset: "fex-rootfs-steam.tar.gz", url: $fex_rootfs_steam_url, sha256: $sha_fex_rootfs_steam }
             }' > manifest.json
 
+          echo "manifest.json:"
+          cat manifest.json
+
       # ── 7. Publish GitHub Release ────────────────────────────────────────
       - name: Create GitHub Release
-        if: steps.changed.outputs.changed == 'true'
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           gh release delete "$TAG" --yes 2>/dev/null || true
@@ -352,13 +465,13 @@ jobs:
 
           | Component | Version |
           |-----------|---------|
-          | RootFS | ${{ steps.versions.outputs.rootfs }} |
-          | PRoot | ${{ steps.versions.outputs.proot }} |
-          | DXVK | ${{ steps.versions.outputs.dxvk }} |
-          | VKD3D-Proton | ${{ steps.versions.outputs.vkd3d }} |
-          | Turnip | ${{ steps.versions.outputs.turnip }} |
-          | FEX | ${{ steps.versions.outputs.fex }} |
-          | FEX rootfs (Steam) | ${{ steps.versions.outputs.fex_rootfs }} |" \
+          | RootFS | ${{ needs.build-assets.outputs.rootfs }} |
+          | PRoot | ${{ needs.build-assets.outputs.proot }} |
+          | DXVK | ${{ needs.build-assets.outputs.dxvk }} |
+          | VKD3D-Proton | ${{ needs.build-assets.outputs.vkd3d }} |
+          | Turnip | ${{ needs.build-assets.outputs.turnip }} |
+          | FEX | ${{ needs.build-assets.outputs.fex }} |
+          | FEX rootfs (Steam) | ${{ needs.build-assets.outputs.fex_rootfs }} |" \
             assets/rootfs.tar.gz \
             assets/proot.tar.gz \
             assets/dxvk.tar.gz \
@@ -371,7 +484,6 @@ jobs:
 
       # ── 8. Commit updated manifest.json back to repo ─────────────────────
       - name: Commit manifest.json
-        if: steps.changed.outputs.changed == 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
