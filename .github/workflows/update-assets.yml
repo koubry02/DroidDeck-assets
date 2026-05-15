@@ -326,6 +326,9 @@ jobs:
             fex-ccache-${{ runner.arch }}-
 
       - name: Configure CMake
+        env:
+          CC: clang
+          CXX: clang++
         run: |
           cmake -S FEX-Source -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_LTO=True \
