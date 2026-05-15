@@ -10,9 +10,10 @@ permissions:
 
 env:
   # Pin FEX to a specific tag — we build from source to control the glibc target.
-  # Bump this when a new FEX release is wanted (currently FEX-2604 uses rpmalloc,
+  # Bump this when a new FEX release is wanted (rpmalloc since FEX-2603,
   # no jemalloc glibc hooks; the segfault fix).
-  FEX_VERSION: FEX-2604
+  # See https://fex-emu.com/FEX-2605/ for changes.
+  FEX_VERSION: FEX-2605
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════════════
