@@ -4,31 +4,31 @@ Binary assets required by the DroidDeck Android app. These files are downloaded 
 
 ## Overview
 
-This repository contains the build artifacts needed to run Wine/Proton on Android via PRoot. The GitHub Actions workflow automatically fetches the latest upstream versions and publishes them as a dated release.
+This repository contains the build artifacts needed to run Wine/Proton on Android via FEX. The GitHub Actions workflow automatically builds or fetches the latest upstream versions and publishes them as a dated release.
 
 ## Assets
 
 | Component | Description | Source | Output |
 |-----------|-------------|--------|--------|
-| **RootFS** | Debian Bookworm Slim with Python3 | Generated via mmdebstrap | `rootfs.tar.gz` |
-| **PRoot** | Userspace container for ARM64 | Termux package mirror | `proot.tar.gz` |
+| **RootFS** | Ubuntu 26.04 Resolute minimal ARM64 (Python3, libstdc++, libgcc) | Built via mmdebstrap | `rootfs.tar.gz` |
+| **PRoot** | Userspace container for ARM64 | green-green-avk/build-proot-android | `proot.tar.gz` |
 | **DXVK** | D3D11 to Vulkan translation layer | doitsujin/dxvk | `dxvk.tar.gz` |
 | **VKD3D-Proton** | D3D12 to Vulkan translation layer | HansKristian-Work/vkd3d-proton | `vkd3d-proton.tar.gz` |
 | **Turnip** | Mesa driver for Adreno GPUs | whitebelyash/freedreno_turnip-CI | `turnip.tar.gz` |
-| **FEX** | x86/x64 emulation runtime | FEX-Emu/FEX | `InstallFEX.py` |
+| **FEX binaries** | x86/x64 emulation runtime (ARM64, built from source) | FEX-Emu/FEX (FEX-2604+, rpmalloc) | `fex-binaries.tar.gz` |
+| **FEX install script** | Legacy installer (never executed at runtime) | FEX-Emu/FEX | `InstallFEX.py` |
+| **FEX guest rootfs** | x86_64 rootfs with Steam + Wayland + Vulkan deps | FEX rootfs squashfs + apt | `fex-rootfs-steam.tar.gz` |
 
 ## Automated Updates
 
 - **Schedule**: Runs on the 1st of every month at 03:00 UTC
 - **Trigger**: Manual via GitHub Actions UI (Workflow Dispatch)
 - **Process**:
-  1. Fetches latest versions from upstream sources
+  1. Fetches latest versions from upstream sources; FEX version pinned to a specific tag for reproducible builds
   2. Compares against `manifest.json` to detect changes
-  3. Builds RootFS using `mmdebstrap` (creates minimal Debian image with Python3)
-  4. Downloads other binaries
-  5. Computes SHA256 checksums
-  6. Creates a dated GitHub Release (`assets-YYYYMMDD`)
-  7. Commits the updated `manifest.json` back to this repo
+  3. **Parallel build**: Job 1 (x86_64) builds RootFS via mmdebstrap + QEMU, downloads DXVK/VKD3D/Turnip/PRoot, builds the x86_64 Steam guest rootfs; Job 2 (ARM64 native) builds FEX from source with rpmalloc (no jemalloc hooks)
+  4. Gatherer job merges artifacts, computes SHA256 checksums, generates manifest, creates release
+  5. Commits the updated `manifest.json` back to this repo
 
 ## manifest.json
 
