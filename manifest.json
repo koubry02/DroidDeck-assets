@@ -1,51 +1,51 @@
 {
-  "updated_at": "2026-05-12T13:58:56Z",
+  "updated_at": "2026-05-15T12:37:47Z",
   "rootfs": {
-    "version": "ubuntu-noble",
+    "version": "resolute",
     "asset": "rootfs.tar.gz",
-    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260512/rootfs.tar.gz",
-    "sha256": "528ab16d6164d3b7f2ced975aebe4a14397b30926f4e11ee4314dc8276861da5"
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260515/rootfs.tar.gz",
+    "sha256": "90c16d59fc099aedc84ee9a5c9904c84473c48dc6157eaefc5ee1d6d257fcaec"
   },
   "proot": {
     "version": "android-static",
     "asset": "proot.tar.gz",
-    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260512/proot.tar.gz",
-    "sha256": "1bf23b00395ae4bf124843cdf808f87fcbb61300b6948678146c0c0bfe5d2318"
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260515/proot.tar.gz",
+    "sha256": "52d08830f9b0ccfdda787f8c22aacbd24cdb063d47d0a4e6e1c94ea79de2ba14"
   },
   "dxvk": {
     "version": "v2.7.1",
     "asset": "dxvk.tar.gz",
-    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260512/dxvk.tar.gz",
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260515/dxvk.tar.gz",
     "sha256": "bf0ebbc4bcdee52811b084abbedba51ccaaa304810ec633b76554e91957d2e20"
   },
   "vkd3d": {
     "version": "v3.0.1",
     "asset": "vkd3d-proton.tar.gz",
-    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260512/vkd3d-proton.tar.gz",
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260515/vkd3d-proton.tar.gz",
     "sha256": "732ea3044418a610e3e82bc067ac5110aeb895c4f0f14baf059e9e5b9b040659"
   },
   "turnip": {
     "version": "tu_v26",
     "asset": "turnip.tar.gz",
-    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260512/turnip.tar.gz",
-    "sha256": "95da6c292ebec57b346aa2f33f079d8f102b5ca8011dedfa2d05efff177c93fc"
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260515/turnip.tar.gz",
+    "sha256": "0bbdc9318ee9566945085d87899fbbc9ae1526d5e615b9f6218070c1dcf79664"
   },
   "fex": {
     "version": "FEX-2605",
     "asset": "InstallFEX.py",
-    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260512/InstallFEX.py",
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260515/InstallFEX.py",
     "sha256": "36320715ca484b6a02da21e144b8b007f54afb22a7c5650cbeb92c5f4f8f65cf"
   },
   "fex_binaries": {
     "version": "FEX-2605",
     "asset": "fex-binaries.tar.gz",
-    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260512/fex-binaries.tar.gz",
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260515/fex-binaries.tar.gz",
     "sha256": "7da91f348e230d66d5b536e040d1ae1d0b8bd496062cc9b9ad72389d4c55eb00"
   },
   "fex_rootfs_steam": {
     "version": "Ubuntu_24_04-2025-12-27",
     "asset": "fex-rootfs-steam.tar.gz",
-    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260512/fex-rootfs-steam.tar.gz",
-    "sha256": "9ec1634643306ea247659a655a9711dfa753fce91a3b1120b832bb4489820773"
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260515/fex-rootfs-steam.tar.gz",
+    "sha256": "1b9720a4c1bc740f1b58eabb26c947ad310aed6556a566b6713625cb3b44c769"
   }
 }
