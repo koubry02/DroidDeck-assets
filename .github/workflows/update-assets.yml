@@ -281,8 +281,8 @@ jobs:
 
           # ── Install Steam + Wayland + Vulkan deps + Wine ──
           sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades --allow-change-held-packages --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
-            mesa-vulkan-drivers mesa-vulkan-drivers:i386 \
-            libvulkan1 libvulkan1:i386 \
+            mesa-vulkan-drivers \
+            libvulkan1 \
             steam-installer \
             libwayland-client0 libwayland-egl1 libwayland-cursor0 \
             libxkbcommon0 xkb-data \
@@ -290,9 +290,9 @@ jobs:
             winehq-devel \
             cabextract p7zip-full unzip \
             winetricks \
-            libfaudio0 libfaudio0:i386 \
-            libpulse0 libpulse0:i386 \
-            libgnutls30 libgnutls30:i386 \
+            libfaudio0 \
+            libpulse0 \
+            libgnutls30 \
             fontconfig \
             xdg-utils
 
