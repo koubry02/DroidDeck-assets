@@ -203,9 +203,9 @@ jobs:
       - name: Build FEX x86_64 guest rootfs with Steam deps
         if: steps.changed.outputs.changed == 'true' && steps.cache-fex-rootfs.outputs.cache-hit != 'true'
         run: |
-          FEX_ROOTFS_TAG="${{ steps.versions.outputs.fex_rootfs }}"
-          FEX_ROOTFS_DATE="${FEX_ROOTFS_TAG#Ubuntu_24_04-}"
-          SQSH_URL="https://rootfs.fex-emu.gg/Ubuntu_24_04/${FEX_ROOTFS_DATE}/Ubuntu_24_04.sqsh"
+          echo "Fetching FEX rootfs URL from RootFS_links.json..."
+          ROOTFS_JSON=$(curl -sL "https://rootfs.fex-emu.gg/RootFS_links.json")
+          SQSH_URL=$(echo "$ROOTFS_JSON" | jq -r '.v1["Ubuntu 24.04 (SquashFS)"].URL')
           echo "Downloading FEX Ubuntu_24_04.sqsh from $SQSH_URL..."
           curl -fsSL "$SQSH_URL" -o /tmp/Ubuntu_24_04.sqsh
 
