@@ -451,8 +451,8 @@ jobs:
           # because wineboot requires a display server (X11/Wayland) which the
           # chroot lacks. Wine will build ~/.wine on first runtime use from
           # the MSIs cached in /usr/share/wine/.
-          sudo chroot /tmp/fex-rootfs sh -c 'wine64 --version' || {
-            echo "ERROR: wine64 --version failed — wine install is broken" >&2
+          sudo chroot /tmp/fex-rootfs sh -c 'wine --version' || {
+            echo "ERROR: wine --version failed — wine install is broken" >&2
             exit 1
           }
 
