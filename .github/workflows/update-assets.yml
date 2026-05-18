@@ -224,7 +224,12 @@ jobs:
           sudo mkdir -p /tmp/fex-rootfs/tmp
           sudo chmod 1777 /tmp/fex-rootfs/tmp
 
+          # FEX wiki: /etc/resolv.conf must be a regular file (not a dangling
+          # symlink to systemd-resolved's stub) for guest network access.
+          sudo rm -f /tmp/fex-rootfs/etc/resolv.conf
           echo "nameserver 1.1.1.1" | sudo tee /tmp/fex-rootfs/etc/resolv.conf
+          sudo rm -f /tmp/fex-rootfs/etc/hosts
+          printf "127.0.0.1\tlocalhost\n::1\t\tlocalhost\n" | sudo tee /tmp/fex-rootfs/etc/hosts
 
           sudo mkdir -p /tmp/fex-rootfs/etc/dpkg/dpkg.cfg.d
           echo "force-unsafe-io" | sudo tee /tmp/fex-rootfs/etc/dpkg/dpkg.cfg.d/01_ci
@@ -327,6 +332,18 @@ jobs:
           sudo rm -rf /tmp/fex-rootfs/var/lib/apt/lists/*
           sudo rm -f /tmp/fex-rootfs/usr/sbin/policy-rc.d
           sudo rm -rf /tmp/fex-rootfs/root/.wine/drive_c/users/*/Temp/* /tmp/fex-rootfs/root/.wine/drive_c/windows/temp/* 2>/dev/null || true
+
+          # FEX's own build_image.py applies chmod +w -R before repacking to avoid
+          # EACCES when FEX-emulated processes create files (squashfs attrs + SELinux).
+          sudo chmod -R +w /tmp/fex-rootfs
+
+          # Recreate /tmp/ and /root/ to purge any stale squashed permissions
+          sudo rm -rf /tmp/fex-rootfs/tmp
+          sudo mkdir -p /tmp/fex-rootfs/tmp
+          sudo chmod 1777 /tmp/fex-rootfs/tmp
+          sudo rm -rf /tmp/fex-rootfs/root
+          sudo mkdir -p /tmp/fex-rootfs/root
+          sudo chmod 755 /tmp/fex-rootfs/root
 
           sudo touch /tmp/fex-rootfs/.steam_deps_ready
 
