@@ -449,25 +449,15 @@ jobs:
             fi
           done
 
-          # ── Wine prefix smoke test ──
-          # We don't ship a pre-built wine prefix (the wipe below removes /root
-          # to keep the tarball clean — wine will rebuild ~/.wine on first run
-          # in the runtime container, using the MSIs we cached in /usr/share/wine).
-          # We still run wineboot here as a smoke test: if wine is broken or a
-          # dependency is missing, this catches it now instead of at runtime.
-          sudo chroot /tmp/fex-rootfs sh -c '
-            export WINEDLLOVERRIDES="winemenubuilder.exe=d;mshtml=d;mscoree=d"
-            export DISPLAY=""
-            export WINEDEBUG=-all
-            timeout 60 wine64 wineboot --init --force 2>/dev/null || true
-          '
-
-          # Verify the prefix actually initialized — wineboot is fire-and-forget
-          # above. Missing system.reg means wine itself is broken; fail loudly.
-          if [ ! -f /tmp/fex-rootfs/root/.wine/system.reg ]; then
-            echo "ERROR: wineboot did not produce ~/.wine/system.reg — wine install is broken" >&2
+          # ── Wine smoke test ──
+          # Verify wine binary is functional. We do NOT create a prefix here
+          # because wineboot requires a display server (X11/Wayland) which the
+          # chroot lacks. Wine will build ~/.wine on first runtime use from
+          # the MSIs cached in /usr/share/wine/.
+          sudo chroot /tmp/fex-rootfs sh -c 'wine64 --version' || {
+            echo "ERROR: wine64 --version failed — wine install is broken" >&2
             exit 1
-          fi
+          }
 
           # ── Clean up ──
           sudo chroot /tmp/fex-rootfs apt-get clean
@@ -479,9 +469,8 @@ jobs:
           sudo rm -rf /tmp/fex-rootfs/tmp
           sudo mkdir -p /tmp/fex-rootfs/tmp
           sudo chmod 1777 /tmp/fex-rootfs/tmp
-          # Wipe /root entirely — this removes the smoke-test wine prefix.
-          # Wine will rebuild ~/.wine on first runtime use from the MSIs in
-          # /usr/share/wine/, so no prefix needs to ship.
+          # Ensure /root exists and is clean — wine will create ~/.wine here
+          # on first runtime use from the MSIs in /usr/share/wine/.
           sudo rm -rf /tmp/fex-rootfs/root
           sudo mkdir -p /tmp/fex-rootfs/root
           sudo chmod 755 /tmp/fex-rootfs/root
