@@ -6,7 +6,9 @@ Binary assets required by the DroidDeck Android app. These files are downloaded 
 
 This repository contains the build artifacts needed to run Steam Big Picture Mode on Android via FEX + Wine. The GitHub Actions workflow automatically builds or fetches the latest upstream versions and publishes them as a dated release.
 
-The most important artifact is the **FEX guest rootfs** (`fex-rootfs-steam.tar.gz`) — a pre-baked Ubuntu 24.04 x86_64 filesystem with Steam, Wine 11.x, Vulkan, Wayland, and all runtime dependencies already installed, plus a pre-initialized Wine prefix so the rootfs is ready to use on-device with zero apt or wineboot calls.
+The most important artifact is the **FEX guest rootfs** (`fex-rootfs-steam.tar.gz`) — a pre-baked Ubuntu 24.04 x86_64 filesystem with Steam, Wine 11.x (for winecfg/vdesktop launch modes), Vulkan, Wayland, and all runtime dependencies already installed, plus a pre-initialized Wine prefix so the rootfs is ready to use on-device with zero apt or wineboot calls.
+
+> **Proton is handled by Steam itself.** The rootfs ships a base Wine for standalone modes; when Steam is launched, it manages its own Proton versions (downloaded into `steamapps/common/`). The DXVK and VKD3D-Proton tarballs in this repo are for non-Steam usage — Proton bundles its own translation layers.
 
 ## Assets
 
@@ -27,7 +29,9 @@ The `fex-rootfs-steam.tar.gz` tarball is the key runtime asset. It contains:
 
 - **Base**: Ubuntu 24.04 (noble) x86_64 from the official FEX squashfs image
 - **Steam**: `steam-installer`, `steam-libs`, `steam-libs:i386`
-- **Wine 11.x**: `winehq-devel` from WineHQ with apt pin priority 1002
+- **Wine 11.x**: `winehq-devel` from WineHQ with apt pin priority 1002.
+  Used for the `winecfg` and vdesktop launch modes. For actual game running,
+  Steam manages its own Proton builds.
 - **Runtime libraries** (both amd64 + i386):
   - `libfaudio0` — XAudio2 reimplementation
   - `libpulse0` — PulseAudio sound
