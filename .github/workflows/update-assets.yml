@@ -279,9 +279,22 @@ jobs:
           Pin-Priority: 1002
           WINE_PIN
 
+          # Purge the pre-installed kisak Mesa packages (both amd64 and i386).
+          # The FEX squashfs ships with Mesa from kisak PPA, but we don't need
+          # native x86-64 Vulkan drivers in the guest — FEX thunks all Vulkan/GL
+          # calls to the host GPU. Keeping them causes version Conflicts between
+          # amd64 (downgraded via Ubuntu) and i386 (stuck at kisak version).
+          sudo chroot /tmp/fex-rootfs sh -c '
+            for pkg in mesa-vulkan-drivers libvulkan1 libvulkan-dev \
+                       mesa-va-drivers mesa-vdpau-drivers; do
+              dpkg --purge $pkg 2>/dev/null || true
+              dpkg --purge $pkg:i386 2>/dev/null || true
+            done
+          '
+
           sudo chroot /tmp/fex-rootfs apt-get update -q
 
-          # Force downgrade of existing Kisak Mesa packages
+          # Dist-upgrade to reconcile remaining packages against our apt sources
           sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y --allow-downgrades --allow-change-held-packages -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
           # ── Install Steam + Wayland + Vulkan deps + Wine ──
