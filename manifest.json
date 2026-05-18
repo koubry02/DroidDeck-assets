@@ -1,0 +1,51 @@
+{
+  "updated_at": "2026-05-18T18:33:07Z",
+  "rootfs": {
+    "version": "resolute",
+    "asset": "rootfs.tar.gz",
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260518/rootfs.tar.gz",
+    "sha256": "b85d38f0745dd329bf2bf37600136e5f9c64e24e9d632f27b885b3ec992faf34"
+  },
+  "proot": {
+    "version": "android-static",
+    "asset": "proot.tar.gz",
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260518/proot.tar.gz",
+    "sha256": "d550bbb0ef2819ca1302af8106ada26363eedea5f67699faa356edfea6e9cf90"
+  },
+  "dxvk": {
+    "version": "v2.7.1",
+    "asset": "dxvk.tar.gz",
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260518/dxvk.tar.gz",
+    "sha256": "d85ce7c79f57ecd765aaa1b9e7007cb875e6fde9f6d331df799bce73d513ce87"
+  },
+  "vkd3d": {
+    "version": "v3.0.1",
+    "asset": "vkd3d-proton.tar.gz",
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260518/vkd3d-proton.tar.gz",
+    "sha256": "732ea3044418a610e3e82bc067ac5110aeb895c4f0f14baf059e9e5b9b040659"
+  },
+  "turnip": {
+    "version": "tu_v26",
+    "asset": "turnip.tar.gz",
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260518/turnip.tar.gz",
+    "sha256": "dade35281c3d685a26ce1c1f56d68ab8e3e54da834445b9713fb8a62c26d5c75"
+  },
+  "fex": {
+    "version": "FEX-2605",
+    "asset": "InstallFEX.py",
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260518/InstallFEX.py",
+    "sha256": "36320715ca484b6a02da21e144b8b007f54afb22a7c5650cbeb92c5f4f8f65cf"
+  },
+  "fex_binaries": {
+    "version": "FEX-2605",
+    "asset": "fex-binaries.tar.gz",
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260518/fex-binaries.tar.gz",
+    "sha256": "ae9b201688b1f3f5df9b189d607d5d192595499047aa88bd1a7e4b2569f08b17"
+  },
+  "fex_rootfs_steam": {
+    "version": "Ubuntu_24_04-2026-05-18",
+    "asset": "fex-rootfs-steam.tar.gz",
+    "url": "https://github.com/koubry02/DroidDeck-assets/releases/download/assets-20260518/fex-rootfs-steam.tar.gz",
+    "sha256": "3f9d3a6f481189090ad9e2ca8b4dc746bd8e940fa5adfec4336397ef33915491"
+  }
+}
