@@ -287,6 +287,10 @@ jobs:
           echo "Extracting squashfs..."
           sudo unsquashfs -d /tmp/fex-rootfs /tmp/Ubuntu_24_04.sqsh
 
+          # Make all files writable BEFORE bind-mounting pseudo-filesystems.
+          # chmod -R on /proc or /sys fails with EPERM, so this must happen
+          # while they are still empty directories.
+          sudo chmod -R +w /tmp/fex-rootfs
           sudo mkdir -p /tmp/fex-rootfs/proc /tmp/fex-rootfs/sys /tmp/fex-rootfs/dev/pts
           sudo mount --bind /proc    /tmp/fex-rootfs/proc
           sudo mount --bind /sys     /tmp/fex-rootfs/sys
@@ -460,8 +464,6 @@ jobs:
           sudo chroot /tmp/fex-rootfs apt-get clean
           sudo rm -rf /tmp/fex-rootfs/var/lib/apt/lists/*
           sudo rm -f /tmp/fex-rootfs/usr/sbin/policy-rc.d
-
-          sudo chmod -R +w /tmp/fex-rootfs
 
           sudo rm -rf /tmp/fex-rootfs/tmp
           sudo mkdir -p /tmp/fex-rootfs/tmp
