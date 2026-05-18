@@ -287,11 +287,46 @@ jobs:
             libwayland-client0 libwayland-egl1 libwayland-cursor0 \
             libxkbcommon0 xkb-data \
             ca-certificates curl \
-            winehq-devel
+            winehq-devel \
+            cabextract p7zip-full unzip \
+            winetricks \
+            libfaudio0 libfaudio0:i386 \
+            libpulse0 libpulse0:i386 \
+            libgnutls30 libgnutls30:i386 \
+            fontconfig \
+            xdg-utils
 
+          # ── Pre-download Gecko and Mono MSIs so wine doesn't try to download them at runtime ──
+          sudo mkdir -p /tmp/fex-rootfs/usr/share/wine/gecko /tmp/fex-rootfs/usr/share/wine/mono
+          curl -fsSL "https://dl.winehq.org/wine/wine-gecko/2.47.4/wine-gecko-2.47.4-x86_64.msi" \
+            -o /tmp/fex-rootfs/usr/share/wine/gecko/wine-gecko-2.47.4-x86_64.msi
+          curl -fsSL "https://dl.winehq.org/wine/wine-gecko/2.47.4/wine-gecko-2.47.4-x86.msi" \
+            -o /tmp/fex-rootfs/usr/share/wine/gecko/wine-gecko-2.47.4-x86.msi
+          curl -fsSL "https://dl.winehq.org/wine/wine-mono/11.1.0/wine-mono-11.1.0-x86.msi" \
+            -o /tmp/fex-rootfs/usr/share/wine/mono/wine-mono-11.1.0-x86.msi
+
+          # ── Wine prefix initialization ──
+          sudo chroot /tmp/fex-rootfs sh -c '
+            export WINEDLLOVERRIDES="winemenubuilder.exe=d;mshtml=d;mscoree=d"
+            export DISPLAY=""
+            export WINEDEBUG=-all
+            timeout 60 wine64 wineboot --init --force 2>/dev/null || true
+          '
+
+          # ── Disable Gecko/Mono download prompts at runtime (fallback if MSI versions mismatch) ──
+          sudo chroot /tmp/fex-rootfs sh -c '
+            export WINEDLLOVERRIDES="winemenubuilder.exe=d"
+            export DISPLAY=""
+            export WINEDEBUG=-all
+            wine64 reg add "HKEY_CURRENT_USER\Software\Wine\Gecko" /v Disabled /t REG_DWORD /d 1 /f 2>/dev/null || true
+            wine64 reg add "HKEY_CURRENT_USER\Software\Wine\Mono" /v Disabled /t REG_DWORD /d 1 /f 2>/dev/null || true
+          '
+
+          # ── Clean up: remove apt cache, temp files, policy-rc.d ──
           sudo chroot /tmp/fex-rootfs apt-get clean
           sudo rm -rf /tmp/fex-rootfs/var/lib/apt/lists/*
           sudo rm -f /tmp/fex-rootfs/usr/sbin/policy-rc.d
+          sudo rm -rf /tmp/fex-rootfs/root/.wine/drive_c/users/*/Temp/* /tmp/fex-rootfs/root/.wine/drive_c/windows/temp/* 2>/dev/null || true
 
           sudo touch /tmp/fex-rootfs/.steam_deps_ready
 
