@@ -52,19 +52,55 @@ The `fex-rootfs-steam.tar.gz` tarball is the key runtime asset. It contains:
 - **Trigger**: Manual via GitHub Actions UI (Workflow Dispatch) — use this to
   publish a new release immediately without waiting for the schedule
 - **Process**:
-  1. Fetches latest versions from upstream sources; FEX version resolved from
-     GitHub API for the latest tag
-  2. Compares against `manifest.json` to detect changes; skips if nothing
-     changed
-  3. **Parallel build**:
-     - **Job 1 (x86_64)**: Builds ARM64 RootFS via mmdebstrap + QEMU user-mode,
-       downloads DXVK/VKD3D/Turnip/PRoot, builds the x86_64 Steam guest rootfs
-       (extracts official FEX squashfs → chroot → apt installs → wine init)
-     - **Job 2 (ARM64 native)**: Builds FEX from source with Clang/LTO on an
-       `ubuntu-24.04-arm` runner
-  4. **Gatherer job** merges artifacts from both jobs, computes SHA256 checksums,
-     generates `manifest.json`, creates a dated GitHub Release, and commits the
-     updated manifest back to the repo
+  1. **Resolve versions**: Fetches the latest FEX release tag from the GitHub
+     API (`gh api repos/FEX-Emu/FEX/releases/latest`). All other component
+     versions are fetched from their respective upstream release pages.
+  2. **Compare**: Compares against `manifest.json` to detect changes; skips
+     the build entirely if nothing has changed.
+  3. **Parallel build** (two jobs run simultaneously):
+     - **Job 1 — x86_64-hosted assets** (runs on `ubuntu-latest`):
+       Builds the ARM64 outer RootFS via `mmdebstrap` + QEMU user-mode,
+       downloads DXVK, VKD3D-Proton, Turnip, and PRoot from their upstream
+       releases, and builds the x86_64 FEX guest rootfs (extracts official
+       FEX squashfs → chroot → apt installs → wine init).
+     - **Job 2 — FEX source build** (runs on `ubuntu-24.04-arm`):
+       Builds FEX natively on ARM64 hardware. FEX only supports AArch64
+       hosts (x86_64 builds require `-DENABLE_X86_HOST_DEBUG=True`, which
+       is CI-only and not production-safe), so an ARM runner is mandatory.
+  4. **Gatherer**: Merges artifacts from both jobs, computes SHA256 checksums,
+     generates `manifest.json`, creates a dated GitHub Release, and commits
+     the updated manifest back to the repo.
+
+### FEX Source Build Details
+
+FEX is built from the latest upstream tag with the following configuration:
+
+```cmake
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DENABLE_LTO=True \
+  -DENABLE_ASSERTIONS=False \
+  -DBUILD_THUNKS=False \          # no 32-bit thunk libraries needed
+  -DBUILD_FEXCONFIG=False \        # no GUI config tool
+  -DBUILD_TESTING=False \          # skip test suite
+  -DBUILD_STEAM_SUPPORT=False \    # Steam integration not needed at FEX level
+  -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
+  -DENABLE_FEX_ALLOCATOR=False \   # rpmalloc disabled — causes TLS-init-order
+                                   # segfault under glibc-on-Android
+  -DCMAKE_INSTALL_PREFIX=/usr \
+  -DTUNE_CPU=generic \
+  -DUSE_LINKER=lld
+```
+
+Key decisions:
+- **Allocator**: FEX's rpmalloc causes a TLS-init-order segfault when running
+  under glibc-on-Android (observed on FEX-2603+). Disabling it (`ENABLE_FEX_ALLOCATOR=False`)
+  falls back to glibc malloc — safe for x86-64 guests (Steam), which is the
+  only use case. The CMake warning about "breaking 32-bit" refers to x86-32
+  guest emulation, which is irrelevant for DroidDeck.
+- **No thunks**: The thunk library system is only needed for 32-bit x86 host
+  systems. Android is AArch64-only, so `BUILD_THUNKS=False`.
+- **LTO**: Enabled for smaller and faster binaries. Building with LTO on the
+  ARM runner takes ~30-45 minutes.
 
 ## manifest.json
 
@@ -79,8 +115,8 @@ Each release includes a `manifest.json` file formatted as flat JSON (no nested
   "dxvk":    { "version": "1.21", "asset": "dxvk.tar.gz",     "url": "...", "sha256": "..." },
   "vkd3d":   { "version": "2.14", "asset": "vkd3d-proton.tar.gz", "url": "...", "sha256": "..." },
   "turnip":  { "version": "v24.3.4", "asset": "turnip.tar.gz",    "url": "...", "sha256": "..." },
-  "fex":     { "version": "v2604", "asset": "InstallFEX.py",     "url": "...", "sha256": "..." },
-  "fex_binaries": { "version": "v2604", "asset": "fex-binaries.tar.gz", "url": "...", "sha256": "..." },
+  "fex":     { "version": "v2605", "asset": "InstallFEX.py",     "url": "...", "sha256": "..." },
+  "fex_binaries": { "version": "v2605", "asset": "fex-binaries.tar.gz", "url": "...", "sha256": "..." },
   "fex_rootfs_steam": { "version": "Ubuntu_24_04-2026-05-18", "asset": "fex-rootfs-steam.tar.gz", "url": "...", "sha256": "..." }
 }
 ```
@@ -126,6 +162,24 @@ To add a new asset type:
 3. Add the asset to the `manifest.json` generation step
 4. Add the asset to the `gh release create` command
 5. Update this README with the new component details
+
+### Modifying the FEX Build
+
+The FEX version is resolved dynamically by the `resolve-versions` job at the
+start of the workflow:
+
+```yaml
+version=$(gh api repos/FEX-Emu/FEX/releases/latest --jq '.tag_name')
+```
+
+It always builds the latest upstream release tag. If you need to pin a specific
+version, hardcode the tag in the `resolve-versions` step instead.
+
+The CMake flags in `build-fex` are tuned for DroidDeck's Android use case.
+Key constraints:
+- Must run on ARM64 (FEX cannot cross-compile; it needs an AArch64 host)
+- Must disable rpmalloc (TLS crash on glibc-on-Android)
+- Must not depend on any thunk libraries or X11
 
 ### Modifying the FEX Guest Rootfs
 The rootfs is built in the `Build FEX x86_64 guest rootfs with Steam deps` step.
