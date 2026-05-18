@@ -319,10 +319,11 @@ jobs:
   # Job 2 — Build FEX from source on ARM64
   #   Why ARM64 native: FEX itself only supports AArch64 hosts (x86_64 host
   #   builds are CI-only debug config via -DENABLE_X86_HOST_DEBUG=True).
-  #   Running on ubuntu-24.04-arm gives us glibc 2.39 — combined with
-  #   -DENABLE_JEMALLOC_GLIBC_ALLOC=FALSE (no dead glibc hooks) and
-  #   -DENABLE_FEX_ALLOCATOR=TRUE (rpmalloc, no hooks needed), the resulting
-  #   binary is safe from the segfault that plagues the PPA-built FEX.
+  #   rpmalloc causes a TLS-init-order segfault under glibc-on-Android
+  #   (FEX-2603+, PR #5235 never merged). Disabling it falls back to
+  #   glibc malloc — safe for x86-64 guests (Steam), the only use case.
+  #   The "breaks 32-bit" CMake warning refers to x86-32 guest emulation,
+  #   irrelevant for DroidDeck.
   # ═══════════════════════════════════════════════════════════════════════════
   build-fex:
     needs: [resolve-versions]
@@ -372,7 +373,7 @@ jobs:
             -DBUILD_TESTING=False \
             -DBUILD_STEAM_SUPPORT=False \
             -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
-            -DENABLE_FEX_ALLOCATOR=True \
+            -DENABLE_FEX_ALLOCATOR=False \
             -DCMAKE_INSTALL_PREFIX=/usr \
             -DTUNE_CPU=generic \
             -DUSE_LINKER=lld
