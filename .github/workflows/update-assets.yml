@@ -297,6 +297,38 @@ jobs:
           # Dist-upgrade to reconcile remaining packages against our apt sources
           sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y --allow-downgrades --allow-change-held-packages -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
+          # ── Purge any pre-existing Ubuntu wine packages ──
+          # The FEX squashfs may include Ubuntu's wine (v9.0) which could conflict
+          # with WineHQ's wine-devel-i386 on shared files or trigger version locks.
+          sudo chroot /tmp/fex-rootfs sh -c '
+            for pkg in wine wine32 wine64 wine32-preloader wine64-preloader \
+                       libwine libwine-dev libwine-development fonts-wine \
+                       wine-binfmt winehq-devel wine-devel wine-devel-amd64 \
+                       wine-devel-i386 wine-stable wine-stable-amd64 \
+                       wine-stable-i386 wine-staging wine-staging-amd64 \
+                       wine-staging-i386; do
+              dpkg --purge $pkg 2>/dev/null || true
+              dpkg --purge $pkg:i386 2>/dev/null || true
+            done
+          '
+
+          # ── Detect the latest matching wine version across amd64 and i386 ──
+          # WineHQ publishes amd64 packages before i386 (e.g. winehq-devel 11.9
+          # exists but wine-devel-i386 only up to 11.8). We query the i386 repo
+          # for the latest wine-devel-i386 version and use that as the ceiling
+          # for all wine packages so the versioned dependency chain resolves.
+          sudo chroot /tmp/fex-rootfs sh -c '
+            WINE_VERSION=$(LC_ALL=C apt-cache show wine-devel-i386:i386 2>/dev/null \
+              | grep "^Version:" | head -1 | awk "{print \$2}")
+            if [ -z "$WINE_VERSION" ]; then
+              echo "ERROR: wine-devel-i386 not found in apt cache" >&2
+              exit 1
+            fi
+            echo "$WINE_VERSION" > /tmp/wine_version.txt
+            echo "Pinning wine packages to version: $WINE_VERSION"
+          '
+          WINE_VER=$(cat /tmp/fex-rootfs/tmp/wine_version.txt)
+
           # ── Install Steam + Wayland + Vulkan deps + Wine ──
           sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades --allow-change-held-packages --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
             mesa-vulkan-drivers \
@@ -305,7 +337,7 @@ jobs:
             libwayland-client0 libwayland-egl1 libwayland-cursor0 \
             libxkbcommon0 xkb-data \
             ca-certificates curl \
-            winehq-devel \
+            winehq-devel=${WINE_VER} \
             cabextract p7zip-full unzip \
             winetricks \
             libfaudio0 \
