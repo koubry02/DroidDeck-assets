@@ -71,7 +71,7 @@ jobs:
           vkd3d=$(gh api repos/HansKristian-Work/vkd3d-proton/releases/latest --jq '.tag_name')
           turnip=$(gh api repos/whitebelyash/freedreno_turnip-CI/releases/latest --jq '.tag_name')
           fex="${{ needs.resolve-versions.outputs.fex_version }}"
-          fex_rootfs="Ubuntu_24_04-2025-12-27"
+          fex_rootfs="Ubuntu_24_04-2026-05-18"
 
           echo "rootfs=$rootfs"       >> "$GITHUB_OUTPUT"
           echo "proot=$proot"         >> "$GITHUB_OUTPUT"
@@ -260,19 +260,34 @@ jobs:
           sudo chmod +x /tmp/fex-rootfs/usr/sbin/policy-rc.d
 
           sudo chroot /tmp/fex-rootfs dpkg --add-architecture i386
+
+          # ── Add WineHQ repository for wine 11.x ──
+          curl -fsSL https://dl.winehq.org/wine-builds/winehq.key | sudo tee /tmp/fex-rootfs/etc/apt/trusted.gpg.d/winehq.asc >/dev/null
+          sudo tee /tmp/fex-rootfs/etc/apt/sources.list.d/winehq.list <<'WINEHQ'
+          deb https://dl.winehq.org/wine-builds/ubuntu noble main
+          WINEHQ
+
+          # Pin wine packages from WineHQ above the Ubuntu 1001 pin so we get the latest wine
+          sudo tee /tmp/fex-rootfs/etc/apt/preferences.d/99-winehq <<'WINE_PIN'
+          Package: winehq-devel wine-devel wine-devel-amd64 wine-devel-i386 winehq-stable wine-stable wine-stable-amd64 wine-stable-i386 winehq-staging wine-staging wine-staging-amd64 wine-staging-i386
+          Pin: release o=winehq
+          Pin-Priority: 1002
+          WINE_PIN
+
           sudo chroot /tmp/fex-rootfs apt-get update -q
 
           # Force downgrade of existing Kisak Mesa packages
           sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y --allow-downgrades --allow-change-held-packages -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
-          # ── Explicitly pass mesa-vulkan-drivers for BOTH architectures to force a synced downgrade ──
+          # ── Install Steam + Wayland + Vulkan deps + Wine ──
           sudo chroot /tmp/fex-rootfs env DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades --allow-change-held-packages --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
             mesa-vulkan-drivers mesa-vulkan-drivers:i386 \
             libvulkan1 libvulkan1:i386 \
             steam-installer \
             libwayland-client0 libwayland-egl1 libwayland-cursor0 \
             libxkbcommon0 xkb-data \
-            ca-certificates curl
+            ca-certificates curl \
+            winehq-devel
 
           sudo chroot /tmp/fex-rootfs apt-get clean
           sudo rm -rf /tmp/fex-rootfs/var/lib/apt/lists/*
