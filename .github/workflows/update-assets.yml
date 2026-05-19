@@ -536,7 +536,10 @@ jobs:
   # ═══════════════════════════════════════════════════════════════════════════
   build-libfexcore:
     needs: [resolve-versions]
-    runs-on: ubuntu-24.04-arm
+    # NDK toolchain binaries (clang, etc.) are x86_64-only on Linux — Google
+    # does not ship a Linux/AArch64 NDK. The NDK still cross-compiles to
+    # arm64-v8a regardless of host, so we run on an x86_64 runner.
+    runs-on: ubuntu-latest
     if: needs.resolve-versions.outputs.changed_fex == 'true'
 
     steps:
@@ -556,12 +559,10 @@ jobs:
             echo "ndk-path=$ANDROID_NDK_HOME" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Download NDK r29 for this platform
+          # Download NDK r29 (Linux/x86_64 — Google does not ship a Linux
+          # AArch64 NDK, so this host arch must be x86_64).
           echo "Downloading Android NDK r29..."
-          # First try ARM64 variant (NDK r27+); fall back to x86_64
           NDK_ZIP="/tmp/android-ndk-r29.zip"
-          curl -fsSL -o "$NDK_ZIP" \
-            "https://dl.google.com/android/repository/android-ndk-r29-linux-arm64.zip" 2>/dev/null || \
           curl -fsSL -o "$NDK_ZIP" \
             "https://dl.google.com/android/repository/android-ndk-r29-linux.zip"
           unzip -q "$NDK_ZIP" -d /opt/
