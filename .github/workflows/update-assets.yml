@@ -593,11 +593,26 @@ jobs:
           cd FEX-Source
           git submodule update --init --depth 1
 
-      - name: ccache cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.ccache
-          key: fexcore-android-ccache-${{ runner.arch }}-${{ needs.resolve-versions.outputs.fex_version }}-${{ hashFiles('FEX-Source/Source/**/*.cpp', 'FEX-Source/Source/**/*.h', 'FEX-Source/FEXCore/**/*.cpp', 'FEX-Source/FEXCore/**/*.h') }}
+      - name: Patch FEX to allow Android as a target system
+        # Upstream FEX's CMakeLists.txt hard-rejects any CMAKE_SYSTEM_NAME
+        # that isn't Linux or Windows. The NDK toolchain file sets it to
+        # "Android", so configure fails immediately. Extending the platform
+        # check is the same workaround downstream Android forks use; FEX
+        # itself is otherwise indifferent to bionic-vs-glibc at the JIT
+        # level, and we're only building FEXCore (no FEX frontend tools).
+        run: |
+          set -euo pipefail
+          cd FEX-Source
+          python3 - <<'PY'
+          import pathlib, re
+          p = pathlib.Path("CMakeLists.txt")
+          s = p.read_text()
+          old = 'NOT (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")'
+          new = 'NOT (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Android")'
+          if old not in s:
+              raise SystemExit("FEX platform check string not found — upstream changed shape, update the patch")
+          p.write_text(s.replace(old, new))
+          PY
           restore-keys: |
             fexcore-android-ccache-${{ runner.arch }}-${{ needs.resolve-versions.outputs.fex_version }}-
             fexcore-android-ccache-${{ runner.arch }}-
