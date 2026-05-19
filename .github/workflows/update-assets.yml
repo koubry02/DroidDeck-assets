@@ -25,13 +25,12 @@ jobs:
   resolve-versions:
     runs-on: ubuntu-latest
     outputs:
-      rootfs_version:     ${{ steps.versions.outputs.rootfs }}
-      proot_version:      ${{ steps.versions.outputs.proot }}
       dxvk_version:       ${{ steps.versions.outputs.dxvk }}
       vkd3d_version:      ${{ steps.versions.outputs.vkd3d }}
       turnip_version:     ${{ steps.versions.outputs.turnip }}
       fex_version:        ${{ steps.versions.outputs.fex }}
       fex_rootfs_version: ${{ steps.versions.outputs.fex_rootfs }}
+      fex_lib_version:    ${{ steps.versions.outputs.fex }}
       changed_host:       ${{ steps.changed.outputs.changed_host }}
       changed_guest:      ${{ steps.changed.outputs.changed_guest }}
       changed_fex:        ${{ steps.changed.outputs.changed_fex }}
@@ -43,49 +42,37 @@ jobs:
         id: versions
         run: |
           set -euo pipefail
-          # RootFS: Ubuntu 26.04 Resolute (literal label; bump manually to force rebuild)
-          rootfs="resolute"
-
-          # PRoot: green-green-avk master HEAD (label; bump to force rebuild)
-          proot="android-static"
-
           dxvk=$(gh api repos/doitsujin/dxvk/releases/latest --jq '.tag_name')
           vkd3d=$(gh api repos/HansKristian-Work/vkd3d-proton/releases/latest --jq '.tag_name')
           turnip=$(gh api repos/whitebelyash/freedreno_turnip-CI/releases/latest --jq '.tag_name')
           fex=$(gh api repos/FEX-Emu/FEX/releases/latest --jq '.tag_name')
           fex_rootfs="Ubuntu_24_04-2026-05-18"
 
-          echo "rootfs=$rootfs"             >> "$GITHUB_OUTPUT"
-          echo "proot=$proot"               >> "$GITHUB_OUTPUT"
           echo "dxvk=$dxvk"                 >> "$GITHUB_OUTPUT"
           echo "vkd3d=$vkd3d"               >> "$GITHUB_OUTPUT"
           echo "turnip=$turnip"             >> "$GITHUB_OUTPUT"
           echo "fex=$fex"                   >> "$GITHUB_OUTPUT"
           echo "fex_rootfs=$fex_rootfs"     >> "$GITHUB_OUTPUT"
 
-          echo "Fetched: rootfs=$rootfs | proot=$proot | dxvk=$dxvk | vkd3d=$vkd3d | turnip=$turnip | fex=$fex | fex_rootfs=$fex_rootfs"
+          echo "Fetched: dxvk=$dxvk | vkd3d=$vkd3d | turnip=$turnip | fex=$fex | fex_rootfs=$fex_rootfs"
 
       - name: Compare versions against manifest
         id: changed
         run: |
           set -euo pipefail
           if [ -f manifest.json ]; then
-            cur_rootfs=$(jq -r '.rootfs.version // empty' manifest.json)
-            cur_proot=$(jq  -r '.proot.version  // empty' manifest.json)
             cur_dxvk=$(jq   -r '.dxvk.version   // empty' manifest.json)
             cur_vkd3d=$(jq  -r '.vkd3d.version  // empty' manifest.json)
             cur_turnip=$(jq -r '.turnip.version // empty' manifest.json)
             cur_fex=$(jq    -r '.fex.version    // empty' manifest.json)
             cur_fex_rootfs=$(jq -r '.fex_rootfs_steam.version // empty' manifest.json)
           else
-            cur_rootfs="" cur_proot="" cur_dxvk="" cur_vkd3d="" cur_turnip="" cur_fex="" cur_fex_rootfs=""
+            cur_dxvk="" cur_vkd3d="" cur_turnip="" cur_fex="" cur_fex_rootfs=""
           fi
 
-          # Host assets: rootfs, proot, dxvk, vkd3d, turnip
+          # Host assets: dxvk, vkd3d, turnip
           changed_host="false"
-          if [[ "$cur_rootfs"  != "${{ steps.versions.outputs.rootfs }}"  ||
-                "$cur_proot"   != "${{ steps.versions.outputs.proot }}"   ||
-                "$cur_dxvk"    != "${{ steps.versions.outputs.dxvk }}"    ||
+          if [[ "$cur_dxvk"    != "${{ steps.versions.outputs.dxvk }}"    ||
                 "$cur_vkd3d"   != "${{ steps.versions.outputs.vkd3d }}"   ||
                 "$cur_turnip"  != "${{ steps.versions.outputs.turnip }}" ]]; then
             changed_host="true"
@@ -97,7 +84,7 @@ jobs:
             changed_guest="true"
           fi
 
-          # FEX binaries
+          # FEX / libFEXCore (same source version)
           changed_fex="false"
           if [[ "$cur_fex" != "${{ steps.versions.outputs.fex }}" ]]; then
             changed_fex="true"
@@ -111,8 +98,7 @@ jobs:
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Job 1 — Host assets (ARM64 native)
-  #   Builds: RootFS (native mmdebstrap, no qemu-user-static overhead),
-  #           PRoot, DXVK, VKD3D-Proton, Turnip, InstallFEX.py
+  #   Fetches: DXVK, VKD3D-Proton, Turnip, InstallFEX.py
   #   Uploads: host-assets artifact for the release job
   # ═══════════════════════════════════════════════════════════════════════════
   build-host-assets:
@@ -125,55 +111,12 @@ jobs:
 
       # ── 0. Install required tools ────────────────────────────────────────
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y mmdebstrap ubuntu-keyring pigz
+        run: sudo apt-get update && sudo apt-get install -y zstd unzip
 
       - name: Ensure assets directory exists
         run: mkdir -p assets
 
-      # ── 1. RootFS ───────────────────────────────────────────────────────
-      # NOTE: no restore-keys here — partial fallbacks would pull an
-      # unrelated old rootfs cache. Exact key match only.
-      - name: Cache RootFS tarball
-        id: cache-rootfs
-        uses: actions/cache@v4
-        with:
-          path: assets/rootfs.tar.gz
-          key: rootfs-${{ needs.resolve-versions.outputs.rootfs_version }}
-
-      - name: Build RootFS (native mmdebstrap)
-        if: steps.cache-rootfs.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          echo "Creating RootFS using mmdebstrap (Azure mirror, parallel gzip)..."
-          sudo mmdebstrap --variant=minbase --architectures=arm64 \
-            --include=python3,libstdc++6,libgcc-s1 \
-            --keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg \
-            resolute - \
-            http://azure.ports.ubuntu.com/ubuntu-ports/ \
-            | pigz -p"$(nproc)" > assets/rootfs.tar.gz
-          sudo chown "$(id -u):$(id -g)" assets/rootfs.tar.gz
-          # Sanity check: fail loudly if the tarball is suspiciously small
-          size=$(stat -c%s assets/rootfs.tar.gz)
-          echo "rootfs.tar.gz size: $size bytes"
-          if [ "$size" -lt 10000000 ]; then
-            echo "ERROR: rootfs.tar.gz is under 10 MB ($size bytes) — mmdebstrap likely failed." >&2
-            exit 1
-          fi
-
-      # ── 2. PRoot ─────────────────────────────────────────────────────────
-      - name: Download PRoot binary
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/proot_extract
-          curl -fL "https://raw.githubusercontent.com/green-green-avk/build-proot-android/master/packages/proot-android-aarch64.tar.gz" -o assets/proot-android.tar.gz
-          tar -xzf assets/proot-android.tar.gz -C /tmp/proot_extract
-          cp /tmp/proot_extract/root/bin/proot assets/proot-aarch64-static
-          chmod +x assets/proot-aarch64-static
-          tar -czf assets/proot.tar.gz -C assets proot-aarch64-static
-          rm assets/proot-aarch64-static assets/proot-android.tar.gz
-          rm -rf /tmp/proot_extract
-
-      # ── 3. DXVK ─────────────────────────────────────────────────────────
+      # ── 1. DXVK ─────────────────────────────────────────────────────────
       - name: Download DXVK archive
         run: |
           set -euo pipefail
@@ -188,7 +131,7 @@ jobs:
           fi
           mv "$DXVK_FILE" assets/dxvk.tar.gz
 
-      # ── 4. VKD3D-Proton ─────────────────────────────────────────────────
+      # ── 2. VKD3D-Proton ─────────────────────────────────────────────────
       - name: Download VKD3D-Proton archive
         run: |
           set -euo pipefail
@@ -202,7 +145,7 @@ jobs:
           zstd -d "$VKD3D_FILE" --stdout | gzip > assets/vkd3d-proton.tar.gz
           rm -f "$VKD3D_FILE"
 
-      # ── 5. Turnip ───────────────────────────────────────────────────────
+      # ── 3. Turnip ───────────────────────────────────────────────────────
       - name: Download Turnip archive
         run: |
           set -euo pipefail
@@ -219,7 +162,7 @@ jobs:
           tar -czf assets/turnip.tar.gz -C assets/turnip_extracted .
           rm -rf "$TURNIP_FILE" assets/turnip_extracted
 
-      # ── 6. InstallFEX.py ────────────────────────────────────────────────
+      # ── 4. InstallFEX.py ────────────────────────────────────────────────
       - name: Download FEX install script
         run: |
           set -euo pipefail
@@ -585,7 +528,149 @@ jobs:
           retention-days: 1
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # Job 4 — Gather, checksum, manifest, release
+  # Job 4 — Build libFEXCore.so for Android (Android NDK cross-compilation)
+  #   Builds: libFEXCore.so from FEX-Emu/FEX using Android NDK r29
+  #   Why separate from build-fex: this targets Android/Bionic via the NDK
+  #   toolchain rather than Linux/glibc. The resulting .so is embedded directly
+  #   in the DroidDeck app (via JNI) without going through FEXServer/ld-linux.
+  # ═══════════════════════════════════════════════════════════════════════════
+  build-libfexcore:
+    needs: [resolve-versions]
+    runs-on: ubuntu-24.04-arm
+    if: needs.resolve-versions.outputs.changed_fex == 'true'
+
+    steps:
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build ccache unzip curl
+
+      - name: Setup Android NDK r29
+        id: setup-ndk
+        run: |
+          set -euo pipefail
+          # Check if NDK is already provided by the runner image
+          if [ -n "${ANDROID_NDK_HOME:-}" ] && [ -f "$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" ]; then
+            echo "Using existing NDK at $ANDROID_NDK_HOME"
+            echo "ndk-path=$ANDROID_NDK_HOME" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Download NDK r29 for this platform
+          echo "Downloading Android NDK r29..."
+          # First try ARM64 variant (NDK r27+); fall back to x86_64
+          NDK_ZIP="/tmp/android-ndk-r29.zip"
+          curl -fsSL -o "$NDK_ZIP" \
+            "https://dl.google.com/android/repository/android-ndk-r29-linux-arm64.zip" 2>/dev/null || \
+          curl -fsSL -o "$NDK_ZIP" \
+            "https://dl.google.com/android/repository/android-ndk-r29-linux.zip"
+          unzip -q "$NDK_ZIP" -d /opt/
+          # Verify extraction
+          NDK_DIR="/opt/android-ndk-r29"
+          if [ ! -d "$NDK_DIR" ]; then
+            # The directory may have a full version suffix; find it
+            NDK_DIR=$(find /opt -maxdepth 1 -name 'android-ndk-*' -type d | head -1)
+          fi
+          if [ ! -f "$NDK_DIR/build/cmake/android.toolchain.cmake" ]; then
+            echo "ERROR: NDK toolchain file not found after extraction" >&2
+            exit 1
+          fi
+          echo "ndk-path=$NDK_DIR" >> "$GITHUB_OUTPUT"
+          echo "ANDROID_NDK_HOME=$NDK_DIR" >> "$GITHUB_ENV"
+
+      - name: Checkout FEX source (${{ needs.resolve-versions.outputs.fex_version }})
+        uses: actions/checkout@v4
+        with:
+          repository: FEX-Emu/FEX
+          ref: ${{ needs.resolve-versions.outputs.fex_version }}
+          path: FEX-Source
+          fetch-depth: 1
+
+      - name: Initialize submodules
+        run: |
+          set -euo pipefail
+          cd FEX-Source
+          git submodule update --init --depth 1
+
+      - name: ccache cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: fexcore-android-ccache-${{ runner.arch }}-${{ needs.resolve-versions.outputs.fex_version }}-${{ hashFiles('FEX-Source/Source/**/*.cpp', 'FEX-Source/Source/**/*.h', 'FEX-Source/FEXCore/**/*.cpp', 'FEX-Source/FEXCore/**/*.h') }}
+          restore-keys: |
+            fexcore-android-ccache-${{ runner.arch }}-${{ needs.resolve-versions.outputs.fex_version }}-
+            fexcore-android-ccache-${{ runner.arch }}-
+
+      - name: Configure CMake for Android
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          set -euo pipefail
+          NDK_HOME="${{ steps.setup-ndk.outputs.ndk-path }}"
+          cmake -S FEX-Source -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-30 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_LTO=On \
+            -DENABLE_JEMALLOC=Off \
+            -DENABLE_ASSERTIONS=False \
+            -DBUILD_THUNKS=False \
+            -DBUILD_FEXCONFIG=False \
+            -DBUILD_TESTING=False \
+            -DBUILD_STEAM_SUPPORT=False \
+            -DTUNE_CPU=generic
+
+      - name: Build FEXCore
+        run: cmake --build build --target FEXCore
+
+      - name: Locate and package libFEXCore.so
+        run: |
+          set -euo pipefail
+          # Find the built libFEXCore.so — it may be in build/lib/ or build/FEXCore/
+          SO_PATH=$(find build -name 'libFEXCore.so' -type f | head -1)
+          if [ -z "$SO_PATH" ]; then
+            echo "ERROR: libFEXCore.so not found after build" >&2
+            find build -name '*.so' -type f 2>/dev/null || true
+            exit 1
+          fi
+          echo "Found libFEXCore.so at: $SO_PATH"
+          ls -lh "$SO_PATH"
+
+          # Also collect any thunk .so files if present (BUILD_THUNKS=False so
+          # usually empty, but check anyway for completeness)
+          mkdir -p libfexcore-pkg
+          cp "$SO_PATH" libfexcore-pkg/
+          THUNKS=$(find build -name '*Thunks*.so' -o -name '*thunks*.so' 2>/dev/null || true)
+          if [ -n "$THUNKS" ]; then
+            echo "Found thunk libraries:"
+            ls -lh $THUNKS
+            cp $THUNKS libfexcore-pkg/
+          fi
+
+          # Package as tarball alongside version metadata
+          (
+            echo "fex_version=${{ needs.resolve-versions.outputs.fex_version }}"
+            echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "target=arm64-v8a"
+            echo "ndk_api=30"
+          ) > libfexcore-pkg/VERSION.txt
+
+          tar czf libfexcore.tar.gz -C libfexcore-pkg .
+          ls -lh libfexcore.tar.gz
+          file libfexcore.tar.gz
+
+      - name: Upload libFEXCore artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libfexcore
+          path: libfexcore.tar.gz
+          retention-days: 1
+          compression-level: 0
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 5 — Gather, checksum, manifest, release
   #   Runs when ANY build job succeeded. Downloads only the artifacts from
   #   successful build jobs, then BACKFILLS unchanged assets from the previous
   #   release so the new release is always a full, self-contained snapshot.
@@ -593,8 +678,8 @@ jobs:
   #   are preserved, not wiped.
   # ═══════════════════════════════════════════════════════════════════════════
   release:
-    needs: [resolve-versions, build-host-assets, build-guest-rootfs, build-fex]
-    if: ${{ always() && (needs.build-host-assets.result == 'success' || needs.build-guest-rootfs.result == 'success' || needs.build-fex.result == 'success') }}
+    needs: [resolve-versions, build-host-assets, build-guest-rootfs, build-fex, build-libfexcore]
+    if: ${{ always() && (needs.build-host-assets.result == 'success' || needs.build-guest-rootfs.result == 'success' || needs.build-fex.result == 'success' || needs.build-libfexcore.result == 'success') }}
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -621,11 +706,11 @@ jobs:
           name: guest-rootfs
           path: assets/
 
-      - name: Download FEX binaries
-        if: needs.build-fex.result == 'success'
+      - name: Download libFEXCore
+        if: needs.build-libfexcore.result == 'success'
         uses: actions/download-artifact@v4
         with:
-          name: fex-binaries
+          name: libfexcore
           path: assets/
 
       # ── Backfill missing assets from the previous release ──
@@ -645,9 +730,10 @@ jobs:
           echo "Backfilling missing assets from previous release: $PREV_TAG"
 
           # For each known asset name, fetch from previous release if missing locally
-          for asset in rootfs.tar.gz proot.tar.gz dxvk.tar.gz vkd3d-proton.tar.gz \
-                       turnip.tar.gz InstallFEX.py fex-binaries.tar.gz \
-                       fex-rootfs-steam.tar.gz; do
+          for asset in dxvk.tar.gz vkd3d-proton.tar.gz \
+                       turnip.tar.gz InstallFEX.py \
+                       fex-rootfs-steam.tar.gz \
+                       libfexcore.tar.gz; do
             if [ ! -f "assets/$asset" ]; then
               echo "  - backfilling $asset"
               gh release download "$PREV_TAG" --pattern "$asset" --dir assets/ 2>/dev/null || \
@@ -670,14 +756,12 @@ jobs:
             name=$(basename "$f")
             sha=$(sha256sum "$f" | awk '{print $1}')
             case "$name" in
-              rootfs.tar.gz)           echo "sha_rootfs=$sha" >> "$GITHUB_OUTPUT" ;;
-              proot.tar.gz)            echo "sha_proot=$sha" >> "$GITHUB_OUTPUT" ;;
               dxvk.tar.gz)             echo "sha_dxvk=$sha" >> "$GITHUB_OUTPUT" ;;
               vkd3d-proton.tar.gz)     echo "sha_vkd3d=$sha" >> "$GITHUB_OUTPUT" ;;
               turnip.tar.gz)           echo "sha_turnip=$sha" >> "$GITHUB_OUTPUT" ;;
               InstallFEX.py)           echo "sha_fex=$sha" >> "$GITHUB_OUTPUT" ;;
-              fex-binaries.tar.gz)     echo "sha_fex_binaries=$sha" >> "$GITHUB_OUTPUT" ;;
               fex-rootfs-steam.tar.gz) echo "sha_fex_rootfs_steam=$sha" >> "$GITHUB_OUTPUT" ;;
+              libfexcore.tar.gz)       echo "sha_libfexcore=$sha" >> "$GITHUB_OUTPUT" ;;
             esac
           done
 
@@ -705,38 +789,31 @@ jobs:
 
           echo "$base" | jq \
             --arg ts "$TIMESTAMP" \
-            --arg rootfs_ver     "${{ needs.resolve-versions.outputs.rootfs_version }}" \
-            --arg proot_ver      "${{ needs.resolve-versions.outputs.proot_version }}" \
             --arg dxvk_ver       "${{ needs.resolve-versions.outputs.dxvk_version }}" \
             --arg vkd3d_ver      "${{ needs.resolve-versions.outputs.vkd3d_version }}" \
             --arg turnip_ver     "${{ needs.resolve-versions.outputs.turnip_version }}" \
             --arg fex_ver        "${{ needs.resolve-versions.outputs.fex_version }}" \
             --arg fex_rootfs_ver "${{ needs.resolve-versions.outputs.fex_rootfs_version }}" \
-            --arg rootfs_url     "${BASE_URL}/rootfs.tar.gz" \
-            --arg proot_url      "${BASE_URL}/proot.tar.gz" \
+            --arg fex_lib_ver    "${{ needs.resolve-versions.outputs.fex_lib_version }}" \
             --arg dxvk_url       "${BASE_URL}/dxvk.tar.gz" \
             --arg vkd3d_url      "${BASE_URL}/vkd3d-proton.tar.gz" \
             --arg turnip_url     "${BASE_URL}/turnip.tar.gz" \
             --arg fex_url        "${BASE_URL}/InstallFEX.py" \
-            --arg fex_bin_url    "${BASE_URL}/fex-binaries.tar.gz" \
             --arg fex_rootfs_url "${BASE_URL}/fex-rootfs-steam.tar.gz" \
-            --arg sha_rootfs       "${{ steps.checksums.outputs.sha_rootfs }}" \
-            --arg sha_proot        "${{ steps.checksums.outputs.sha_proot }}" \
+            --arg fex_lib_url    "${BASE_URL}/libfexcore.tar.gz" \
             --arg sha_dxvk         "${{ steps.checksums.outputs.sha_dxvk }}" \
             --arg sha_vkd3d        "${{ steps.checksums.outputs.sha_vkd3d }}" \
             --arg sha_turnip       "${{ steps.checksums.outputs.sha_turnip }}" \
             --arg sha_fex          "${{ steps.checksums.outputs.sha_fex }}" \
-            --arg sha_fex_binaries "${{ steps.checksums.outputs.sha_fex_binaries }}" \
             --arg sha_fex_rootfs   "${{ steps.checksums.outputs.sha_fex_rootfs_steam }}" \
+            --arg sha_libfexcore   "${{ steps.checksums.outputs.sha_libfexcore }}" \
             '. + { updated_at: $ts }
-             + (if ($sha_rootfs       | length > 0) then { rootfs:           { version: $rootfs_ver,     asset: "rootfs.tar.gz",           url: $rootfs_url,     sha256: $sha_rootfs       } } else {} end)
-             + (if ($sha_proot        | length > 0) then { proot:            { version: $proot_ver,      asset: "proot.tar.gz",            url: $proot_url,      sha256: $sha_proot        } } else {} end)
              + (if ($sha_dxvk         | length > 0) then { dxvk:             { version: $dxvk_ver,       asset: "dxvk.tar.gz",             url: $dxvk_url,       sha256: $sha_dxvk         } } else {} end)
              + (if ($sha_vkd3d        | length > 0) then { vkd3d:            { version: $vkd3d_ver,      asset: "vkd3d-proton.tar.gz",     url: $vkd3d_url,      sha256: $sha_vkd3d        } } else {} end)
              + (if ($sha_turnip       | length > 0) then { turnip:           { version: $turnip_ver,     asset: "turnip.tar.gz",           url: $turnip_url,     sha256: $sha_turnip       } } else {} end)
              + (if ($sha_fex          | length > 0) then { fex:              { version: $fex_ver,        asset: "InstallFEX.py",           url: $fex_url,        sha256: $sha_fex          } } else {} end)
-             + (if ($sha_fex_binaries | length > 0) then { fex_binaries:     { version: $fex_ver,        asset: "fex-binaries.tar.gz",     url: $fex_bin_url,    sha256: $sha_fex_binaries } } else {} end)
              + (if ($sha_fex_rootfs   | length > 0) then { fex_rootfs_steam: { version: $fex_rootfs_ver, asset: "fex-rootfs-steam.tar.gz", url: $fex_rootfs_url, sha256: $sha_fex_rootfs   } } else {} end)
+             + (if ($sha_libfexcore   | length > 0) then { libfexcore:       { version: $fex_lib_ver,    asset: "libfexcore.tar.gz",       url: $fex_lib_url,    sha256: $sha_libfexcore   } } else {} end)
             ' > manifest.json.new
           mv manifest.json.new manifest.json
 
@@ -763,13 +840,12 @@ jobs:
 
           | Component | Version |
           |-----------|---------|
-          | RootFS | ${{ needs.resolve-versions.outputs.rootfs_version }} |
-          | PRoot | ${{ needs.resolve-versions.outputs.proot_version }} |
           | DXVK | ${{ needs.resolve-versions.outputs.dxvk_version }} |
           | VKD3D-Proton | ${{ needs.resolve-versions.outputs.vkd3d_version }} |
           | Turnip | ${{ needs.resolve-versions.outputs.turnip_version }} |
-          | FEX | ${{ needs.resolve-versions.outputs.fex_version }} |
-          | FEX rootfs (Steam) | ${{ needs.resolve-versions.outputs.fex_rootfs_version }} |" \
+          | InstallFEX.py | ${{ needs.resolve-versions.outputs.fex_version }} |
+          | FEX rootfs (Steam) | ${{ needs.resolve-versions.outputs.fex_rootfs_version }} |
+          | libFEXCore (Android) | ${{ needs.resolve-versions.outputs.fex_lib_version }} |" \
             "${ASSETS[@]}" \
             manifest.json
 
